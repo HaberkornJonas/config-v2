@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>brainstorm.html</title>
+  <style>
+    :root {
+      --bg: #061017;
+      --bg2: #0c1823;
+      --panel: rgba(11, 20, 31, 0.86);
+      --line: rgba(120, 200, 255, 0.18);
+      --text: #d8f5ff;
+      --muted: #87a8bb;
+      --cyan: #53e6ff;
+      --green: #73ff98;
+      --amber: #ffd166;
+      --pink: #ff7bd5;
+      --red: #ff6b88;
+      --purple: #b69cff;
+      --ghost: #c9f1ff;
+      --shadow: 0 24px 80px rgba(0,0,0,.42);
+      --radius: 20px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      --sans: Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: var(--sans);
+      background:
+        radial-gradient(circle at 20% 0%, rgba(83,230,255,.18), transparent 30%),
+        radial-gradient(circle at 85% 15%, rgba(182,156,255,.16), transparent 22%),
+        radial-gradient(circle at 50% 100%, rgba(115,255,152,.12), transparent 35%),
+        linear-gradient(180deg, #050b11 0%, #08131c 45%, #061017 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+      background-size: 100% 28px, 28px 100%;
+      mask-image: linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,.1));
+    }
+
+    .wrap {
+      width: min(1200px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 80px;
+    }
+
+    .terminal-window,
+    .panel,
+    .room,
+    .quadrant,
+    .persona-step,
+    .ghost-card,
+    .matrix,
+    .architecture,
+    .synthesis {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      border-radius: var(--radius);
+    }
+
+    .terminal-window {
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .dots { display: flex; gap: 8px; }
+    .dot { width: 11px; height: 11px; border-radius: 999px; }
+    .dot.red { background: #ff5f57; }
+    .dot.yellow { background: #febc2e; }
+    .dot.green { background: #28c840; }
+
+    .hero {
+      padding: 28px;
+      display: grid;
+      gap: 22px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 4.4rem);
+      line-height: .95;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 78ch;
+      color: var(--muted);
+      font-size: 1.02rem;
+    }
+
+    .cmd {
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.7;
+      padding: 18px 20px;
+      border-radius: 18px;
+      background: rgba(0,0,0,.28);
+      border: 1px solid rgba(255,255,255,.06);
+      white-space: pre-wrap;
+    }
+
+    .prompt { color: var(--green); }
+    .path { color: var(--cyan); }
+    .comment { color: var(--muted); }
+    .accent { color: var(--amber); }
+
+    .chipbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip, .tag, .toggle {
+      font-family: var(--mono);
+      font-size: 12px;
+      border-radius: 999px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.03);
+    }
+
+    .toggle {
+      cursor: pointer;
+      color: var(--text);
+      transition: .2s ease;
+      user-select: none;
+    }
+
+    .toggle:hover, .toggle.active {
+      border-color: rgba(83,230,255,.4);
+      box-shadow: 0 0 0 1px rgba(83,230,255,.15) inset;
+      color: var(--cyan);
+    }
+
+    .section {
+      margin-top: 26px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 16px;
+      padding: 0 2px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(1.4rem, 2vw, 2.2rem);
+      letter-spacing: -0.03em;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 72ch;
+    }
+
+    .grid-2, .grid-3, .grid-rooms, .scenario-grid, .ghost-grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .grid-rooms { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .scenario-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .ghost-grid { grid-template-columns: 1.1fr .9fr; }
+
+    .panel { padding: 22px; }
+
+    .label {
+      font-family: var(--mono);
+      color: var(--cyan);
+      font-size: 12px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .ascii {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      color: #dbfbff;
+      padding: 20px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(0,0,0,.32), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.05);
+      overflow: auto;
+    }
+
+    .idea-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .idea {
+      display: flex;
+      gap: 10px;
+      align-items: start;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.05);
+    }
+
+    .badge {
+      flex: 0 0 auto;
+      margin-top: 2px;
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .user .badge { color: var(--amber); border-color: rgba(255,209,102,.34); background: rgba(255,209,102,.09); }
+    .coach .badge { color: var(--cyan); border-color: rgba(83,230,255,.3); background: rgba(83,230,255,.08); }
+    .decision .badge { color: var(--green); border-color: rgba(115,255,152,.25); background: rgba(115,255,152,.09); }
+
+    .idea p { margin: 0; color: #d3e7f2; }
+    .muted { color: var(--muted); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 13px 14px;
+      border: 1px solid rgba(255,255,255,.07);
+      vertical-align: top;
+    }
+
+    th {
+      text-align: left;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      background: rgba(255,255,255,.04);
+    }
+
+    td strong { color: var(--text); }
+    td span { color: var(--muted); }
+
+    .room {
+      padding: 22px;
+      position: relative;
+      overflow: hidden;
+      min-height: 320px;
+    }
+
+    .room::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .12;
+    }
+
+    .dream::before { background: radial-gradient(circle at 20% 10%, #ffd166, transparent 35%), radial-gradient(circle at 80% 70%, #ff7bd5, transparent 30%); }
+    .realist::before { background: linear-gradient(135deg, rgba(83,230,255,.7), transparent 36%), radial-gradient(circle at 85% 15%, #73ff98, transparent 22%); }
+    .critic::before { background: radial-gradient(circle at 20% 15%, #ff6b88, transparent 22%), linear-gradient(180deg, rgba(255,107,136,.4), transparent 46%); }
+
+    .room h3 {
+      margin: 0 0 8px;
+      font-size: 1.35rem;
+    }
+
+    .room .subtitle {
+      color: var(--muted);
+      margin-bottom: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .persona-track {
+      display: grid;
+      gap: 14px;
+    }
+
+    .persona-step {
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .persona-step::before {
+      content: attr(data-step);
+      position: absolute;
+      right: 14px;
+      top: 10px;
+      font-family: var(--mono);
+      font-size: 56px;
+      line-height: 1;
+      color: rgba(255,255,255,.04);
+      font-weight: 700;
+    }
+
+    .persona-step h3, .ghost-card h3, .quadrant h3, .architecture h3, .synthesis h3 {
+      margin: 0 0 8px;
+      font-size: 1.16rem;
+    }
+
+    .persona-step p, .ghost-card p, .quadrant p, .architecture p, .synthesis p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .ghost-card {
+      padding: 22px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ghost-card.haunt {
+      background:
+        radial-gradient(circle at 18% 12%, rgba(201,241,255,.17), transparent 28%),
+        linear-gradient(180deg, rgba(201,241,255,.06), rgba(0,0,0,.15)),
+        var(--panel);
+    }
+
+    .ghost {
+      font-size: 84px;
+      line-height: 1;
+      filter: drop-shadow(0 0 18px rgba(201,241,255,.25));
+      margin-bottom: 10px;
+    }
+
+    .haunt-list {
+      list-style: none;
+      padding: 0;
+      margin: 14px 0 0;
+      display: grid;
+      gap: 10px;
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .haunt-list li {
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.06);
+      background: rgba(255,255,255,.03);
+    }
+
+    .scenario-grid .quadrant {
+      padding: 22px;
+      min-height: 230px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .quadrant::after {
+      content: "";
+      position: absolute;
+      inset: auto -20% -35% auto;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(83,230,255,.16), transparent 70%);
+      pointer-events: none;
+    }
+
+    .synthesis {
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(115,255,152,.14), transparent 25%),
+        radial-gradient(circle at 78% 20%, rgba(83,230,255,.18), transparent 22%),
+        linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.06)),
+        var(--panel);
+    }
+
+    .synthesis::before {
+      content: "git log --oneline --decorate decisions";
+      position: absolute;
+      top: 18px;
+      right: 20px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: rgba(255,255,255,.18);
+    }
+
+    .decision-stream {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .decision-line {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 12px 0;
+      border-top: 1px dashed rgba(255,255,255,.08);
+      font-family: var(--mono);
+      font-size: 14px;
+    }
+
+    .decision-line:first-child { border-top: 0; }
+    .hash { color: var(--green); }
+    .architecture {
+      padding: 24px;
+      background:
+        linear-gradient(180deg, rgba(83,230,255,.05), rgba(0,0,0,.05)),
+        var(--panel);
+    }
+
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-top: 16px;
+    }
+
+    .repo-box {
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 18px;
+      padding: 18px;
+      background: rgba(255,255,255,.03);
+    }
+
+    .repo-box h4 {
+      margin: 0 0 10px;
+      font-size: 1.1rem;
+    }
+
+    .tree-mini {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      color: #dafbff;
+      margin: 0;
+    }
+
+    .callout {
+      margin-top: 18px;
+      padding: 16px 18px;
+      border-radius: 16px;
+      border: 1px solid rgba(115,255,152,.22);
+      background: rgba(115,255,152,.06);
+    }
+
+    .footer {
+      margin-top: 28px;
+      padding: 18px 4px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+
+    .hidden-user .user,
+    .hidden-coach .coach { display: none; }
+
+    @media (max-width: 960px) {
+      .grid-2, .grid-3, .grid-rooms, .scenario-grid, .ghost-grid, .arch-grid { grid-template-columns: 1fr; }
+      .decision-line { grid-template-columns: 1fr; }
+      .footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app">
+    <section class="terminal-window">
+      <div class="titlebar">
+        <div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+        <div>brainstorm.html :: public dev environment config repo</div>
+        <div>sharp / reproducible / silent</div>
+      </div>
+      <div class="hero">
+        <div>
+          <div class="label">Session keepsake</div>
+          <h1>Clone once.<br/>Arrive configured.</h1>
+        </div>
+        <p>
+          A brainstorming session turned into a living terminal relic: six techniques, one hard-edged design target,
+          and a final architecture for a public repo that can spin up dev environments across Arch, Ubuntu, WSL, VMs,
+          and multiple machines without turning setup into folklore.
+        </p>
+        <div class="cmd"><span class="prompt">jonas@fresh-box</span>:<span class="path">~</span>$ git clone &lt;public-config-repo&gt; &amp;&amp; ./setup.sh
+<span class="comment"># scope: software development only</span>
+<span class="comment"># principle: non-destructive for secrets, overwrite config, stay silent, stay light</span>
+<span class="accent">result:</span> one entry point, two repos, chezmoi-owned dotfiles, config.sh as shared truth, fnm over nvm, zsh stack loaded, checklist waiting at the edge.</div>
+        <div class="chipbar">
+          <span class="chip">Linux / WSL / VM</span>
+          <span class="chip">Arch + Ubuntu + Windows orbit</span>
+          <span class="chip">Public repo</span>
+          <span class="chip">No interactive prompts</span>
+          <span class="chip">Script doubles as update/sync tool</span>
+        </div>
+        <div class="chipbar">
+          <button class="toggle active" data-filter="all">show all voices</button>
+          <button class="toggle active" data-filter="user">show user</button>
+          <button class="toggle active" data-filter="coach">show coach</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>1. Decision Tree Mapping</h2>
+          <p>The repo design started as branching questions: public or private, one repo or two, destructive or careful, custom diffing or a real stateful dotfile tool.</p>
+        </div>
+        <span class="tag">ASCII topology</span>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="label">Rendered as a shell-native tree</div>
+          <pre class="ascii">public-config-repo
+├─ entrypoint?
+│  └─ yes → git clone + run setup.sh                          <span class="accent">(by user)</span>
+├─ visibility?
+│  └─ public repo confirmed                                   <span class="accent">(by user)</span>
+│     ├─ secrets strategy?
+│     │  ├─ GPG private key on Yubikey; fingerprint in repo    <span class="accent">(by user)</span>
+│     │  └─ SSH key generated fresh per setup                  <span class="accent">(by user)</span>
+│     └─ same git identity across machines                     <span class="accent">(by user)</span>
+├─ behaviour?
+│  ├─ secrets → keep if already present                        <span class="accent">(by user)</span>
+│  ├─ config → always overwrite                                <span class="accent">(by user)</span>
+│  └─ run style → fully silent, no prompts                     <span class="accent">(by user)</span>
+├─ conflict handling?
+│  ├─ naive git pull compare → impossible after overwrite
+│  └─ need deployed-state memory                               <span class="accent">(by coach)</span>
+│     ├─ DIY hash file
+│     ├─ symlinks
+│     └─ chezmoi → 3-way merge, templates, bootstrap           <span class="accent">(by coach)</span>
+└─ architecture?
+   └─ split responsibility                                      <span class="accent">(by user)</span>
+      ├─ config-v2 → setup + packages
+      └─ dotfiles → chezmoi-managed                             <span class="accent">(by user)</span></pre>
+        </div>
+        <div class="panel">
+          <div class="label">Branches that locked the trunk</div>
+          <div class="idea-list">
+            <div class="idea user"><span class="badge">by user</span><p>Single entry point won immediately: the setup should begin with clone and one script, with no pre-decisions demanded from the operator.</p></div>
+            <div class="idea coach"><span class="badge">by coach</span><p>Conflict detection forced a serious pivot: if the repo overwrites dotfiles, it needs state memory. chezmoi emerged as the clean answer instead of inventing a merge engine.</p></div>
+            <div class="idea decision"><span class="badge">decision</span><p>The split into two repos made the tree stable: install orchestration lives apart from evolving personal dotfiles.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>2. Solution Matrix</h2>
+          <p>Every concern got an owner. The winning setup stopped trying to make one script control the whole world.</p>
+        </div>
+        <span class="tag">Real grid, clean ownership</span>
+      </div>
+      <div class="matrix panel">
+        <table>
+          <thead>
+            <tr>
+              <th>Concern</th>
+              <th>Winning owner</th>
+              <th>Why it wins</th>
+              <th>Evidence from session</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Package installation</strong></td>
+              <td>OS package manager</td>
+              <td><span>Native, boring, distro-aware. Arch and Ubuntu can diverge cleanly via separate package lists.</span></td>
+              <td><span>packages/arch.txt and packages/ubuntu.txt surfaced because names and extra repos differ.</span></td>
+            </tr>
+            <tr>
+              <td><strong>Dotfiles + conflict memory</strong></td>
+              <td>chezmoi</td>
+              <td><span>Owns deployed state, templates, and 3-way merge; prevents setup.sh from becoming a dotfile engine.</span></td>
+              <td><span>Coach highlighted that conflict detection needs state; chezmoi covers the entire dotfile problem.</span></td>
+            </tr>
+            <tr>
+              <td><strong>Run orchestration</strong></td>
+              <td>setup.sh</td>
+              <td><span>Coordinates only. Installs packages, invokes tooling, stays silent, avoids owning content.</span></td>
+              <td><span>Matrix synthesis explicitly concluded: setup.sh is pure orchestration and never owns content.</span></td>
+            </tr>
+            <tr>
+              <td><strong>Host-only chores</strong></td>
+              <td>Post-install checklist</td>
+              <td><span>Keeps impossible-to-automate edges visible instead of pretending Linux can install host fonts.</span></td>
+              <td><span>Nerd Fonts on host OS became the model example.</span></td>
+            </tr>
+            <tr>
+              <td><strong>Shared identity/config</strong></td>
+              <td>config.sh</td>
+              <td><span>Tool-free parsing, sourceable in bash, regex-readable in PowerShell, zero jq dependency.</span></td>
+              <td><span>config.json was tried and rejected after the critic caught jq chicken-and-egg and minimal Arch concerns.</span></td>
+            </tr>
+            <tr>
+              <td><strong>Node version management</strong></td>
+              <td>fnm</td>
+              <td><span>Faster and lighter than nvm for the target setup style.</span></td>
+              <td><span>User confirmed fnm over nvm after critic pressure.</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>3. Disney Method</h2>
+          <p>The room changes, the repo changes with it: first ambition, then mechanics, then attack.</p>
+        </div>
+        <span class="tag">Three distinct rooms</span>
+      </div>
+      <div class="grid-rooms">
+        <div class="room dream">
+          <div class="subtitle">Dreamer room</div>
+          <h3>Make the bootstrap feel inevitable</h3>
+          <div class="idea-list">
+            <div class="idea user"><span class="badge">by user</span><p>Bring Windows into the orbit too — Scoop-managed setup on the host side.</p></div>
+            <div class="idea coach"><span class="badge">by coach</span><p>Let setup.ps1 bootstrap Windows, install WSL2, then hand off automatically to setup.sh inside Linux.</p></div>
+            <div class="idea coach"><span class="badge">by coach</span><p>Use one shared root config so every script reads the same identity and choices.</p></div>
+            <div class="idea coach"><span class="badge">by coach</span><p>Run setup.sh in CI on every push so breakage gets caught before a real machine has to suffer it.</p></div>
+          </div>
+        </div>
+        <div class="room realist">
+          <div class="subtitle">Realist room</div>
+          <h3>Translate the dream into files that can survive first contact</h3>
+          <div class="idea-list">
+            <div class="idea coach"><span class="badge">by coach</span><p>Use a shared config file at repo root for both PowerShell and bash.</p></div>
+            <div class="idea decision"><span class="badge">decision</span><p>config.json briefly looked right, then the later critic pass forced a simpler format.</p></div>
+            <div class="idea coach"><span class="badge">by coach</span><p>Windows bootstrap should be two-phase if it exists: install prerequisites first, then hand off later when Linux is actually ready.</p></div>
+            <div class="idea decision"><span class="badge">decision</span><p>Windows automation stays in the future lane; WSL2 auto-bootstrap was dropped as not worth the interactive user-creation friction.</p></div>
+          </div>
+        </div>
+        <div class="room critic">
+          <div class="subtitle">Critic room</div>
+          <h3>Kill the fragile assumptions</h3>
+          <div class="idea-list">
+            <div class="idea coach"><span class="badge">by coach</span><p>jq creates a chicken-and-egg bootstrap problem. Minimal Arch may not even have Python. Tool-heavy parsing is a liability.</p></div>
+            <div class="idea coach"><span class="badge">by coach</span><p>Docker group membership needs relogin, chsh is unreliable in WSL, CI on Ubuntu alone will miss Arch-specific issues.</p></div>
+            <div class="idea user"><span class="badge">by user</span><p>nvm feels too slow; a lighter Node manager is better for the philosophy of the repo.</p></div>
+            <div class="idea decision"><span class="badge">decision</span><p>config.sh replaced JSON, fnm replaced nvm, and the design got sharper because the critic was allowed to be rude.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>4. Persona Journey</h2>
+          <p>A future self lands on a blank machine and tries to reconstruct what to do without remembering the conversation.</p>
+        </div>
+        <span class="tag">Cold start path</span>
+      </div>
+      <div class="persona-track">
+        <div class="persona-step" data-step="01">
+          <h3>Arrival: "What do I run first?"</h3>
+          <p>The strongest answer remained brutally short: clone the public repo and run setup.sh. The single-entry philosophy is not just convenience; it is orientation.</p>
+        </div>
+        <div class="persona-step" data-step="02">
+          <h3>Calibration: "Do I edit something before the run?"</h3>
+          <p>The shared config file became central because it answers this question. The final synthesis points toward config.sh pre-filled enough to allow a fully silent bootstrap.</p>
+        </div>
+        <div class="persona-step" data-step="03">
+          <h3>Patience: "How long does this take, and when is it done?"</h3>
+          <p>The session exposed a UX gap: a new machine needs signals about duration, first-run expectations, and what remains manual even after automation finishes.</p>
+        </div>
+        <div class="persona-step" data-step="04">
+          <h3>Edge of automation: "Why does my prompt still look wrong?"</h3>
+          <p>Because fonts live on the host side. The post-install checklist exists to keep these off-machine concerns visible instead of burying them in frustration.</p>
+        </div>
+        <div class="persona-step" data-step="05">
+          <h3>Long tail: "When I tweak dotfiles, what habit keeps this system alive?"</h3>
+          <p>The journey surfaced one soft requirement: remember to push dotfile changes. Minimal docs were accepted, but the workflow still needs that maintenance reflex.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>5. The Stateful Ghost</h2>
+          <p>An invented technique. Every new environment is haunted by what the old one forgot to confess.</p>
+        </div>
+        <span class="tag">Haunting turned checklist</span>
+      </div>
+      <div class="ghost-grid">
+        <div class="ghost-card haunt">
+          <div class="ghost">👻</div>
+          <h3>"I only break on fresh machines."</h3>
+          <p>The ghost names the missing state: variables not written down, packages installed once and never recorded, host-side steps that never made it into code, keys that should not be overwritten, and local dotfile edits that vanish during updates.</p>
+          <ul class="haunt-list">
+            <li>haunt::missing-vars → solved by a shared config file</li>
+            <li>haunt::forgotten-packages → solved by distro-specific package manifests</li>
+            <li>haunt::destroyed-local-dotfiles → solved by chezmoi state + merge behaviour</li>
+            <li>haunt::host-fonts-and-terminal → solved by post-install checklist</li>
+            <li>haunt::secret-clobbering → solved by non-destructive handling for keys</li>
+          </ul>
+        </div>
+        <div class="ghost-card">
+          <h3>What the ghost forced into the design</h3>
+          <div class="idea-list">
+            <div class="idea user"><span class="badge">by user</span><p>Keep existing SSH key material if present; the script must not smash secrets just because it can.</p></div>
+            <div class="idea coach"><span class="badge">by coach</span><p>State memory is not optional if updates can touch local config; either store hashes, use symlinks, or bring in a real tool.</p></div>
+            <div class="idea decision"><span class="badge">decision</span><p>chezmoi became the anti-haunting device. setup.sh stays small because the ghost scared responsibility boundaries into place.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>6. Scenario Cross</h2>
+          <p>Four futures, one architecture. If the plan only works on a lucky day, it is not reproducible.</p>
+        </div>
+        <span class="tag">Arch/Ubuntu × cold/incremental</span>
+      </div>
+      <div class="scenario-grid">
+        <div class="quadrant panel">
+          <div class="label">Arch × cold clone</div>
+          <h3>Minimal machine, minimal assumptions</h3>
+          <p>Anything requiring jq or Python too early is suspicious here. config.sh survives because it can be sourced directly, while fnm via curl keeps Node setup light. Arch-specific package names justify a dedicated package file.</p>
+        </div>
+        <div class="quadrant panel">
+          <div class="label">Ubuntu × cold clone</div>
+          <h3>Friendly base, awkward extras</h3>
+          <p>Ubuntu is easier until Docker and .NET need extra repository setup. The architecture still holds because setup.sh orchestrates distro-specific prep instead of hiding it behind fake uniformity.</p>
+        </div>
+        <div class="quadrant panel">
+          <div class="label">Arch × incremental sync</div>
+          <h3>Fast-moving box, local edits at risk</h3>
+          <p>This is where naive overwrite strategies fall apart. chezmoi wins the quadrant by remembering deployed state, while the script can rerun as an update/sync tool without pretending it owns user content.</p>
+        </div>
+        <div class="quadrant panel">
+          <div class="label">Ubuntu × incremental sync</div>
+          <h3>Stable machine, drifting config</h3>
+          <p>The same split still wins: package manager for installs, chezmoi for dotfiles, manual checklist for host items. A plan that survives all four quadrants is the one that became the session's final architecture.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Climax: Synthesis & key decisions</h2>
+          <p>The brainstorm stopped being a pile of ideas when maintenance pressure, fresh-machine pressure, and public-repo pressure all pointed to the same answer.</p>
+        </div>
+        <span class="tag">Merge commit</span>
+      </div>
+      <div class="synthesis">
+        <h3>Final synthesis</h3>
+        <p>config.sh pre-filled enough for silence, chezmoi as the stateful dotfile owner, and a light-touch setup philosophy that refuses to globalise project-specific clutter. The long-term strategy is not more automation at any cost — it is tighter boundaries.</p>
+        <div class="decision-stream">
+          <div class="decision-line"><span class="hash">a1f0e9</span><span>Public repo stays public; secret handling shifts to fingerprints, hardware keys, and per-machine SSH generation instead of hiding everything.</span></div>
+          <div class="decision-line"><span class="hash">c7d312</span><span>Two-repo architecture locked in: <strong>config-v2</strong> for setup and packages, <strong>dotfiles</strong> for chezmoi-managed personal state.</span></div>
+          <div class="decision-line"><span class="hash">d44b8c</span><span>setup.sh becomes pure orchestration: silent, non-interactive, safe around secrets, rerunnable as update/sync.</span></div>
+          <div class="decision-line"><span class="hash">ef8190</span><span>config.json was cut; <strong>config.sh</strong> wins because the bootstrap cannot depend on heavyweight parsers.</span></div>
+          <div class="decision-line"><span class="hash">f2ac11</span><span><strong>fnm</strong> replaces nvm, matching the "light as possible" rule.</span></div>
+          <div class="decision-line"><span class="hash">ff0c42</span><span>Host-only friction is admitted openly via a post-install checklist instead of being disguised as a Linux failure.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Highlighted final architecture</h2>
+          <p>The part worth reopening: the buildable shape that emerged from all six techniques.</p>
+        </div>
+        <span class="tag">Blueprint</span>
+      </div>
+      <div class="architecture">
+        <h3>Two repos, one ritual</h3>
+        <p>The public config system stabilised around a clean split. One repo knows how to prepare the machine. The other knows what the shell, editor, tmux, and prompt should become.</p>
+        <div class="arch-grid">
+          <div class="repo-box">
+            <h4>repo: config-v2</h4>
+            <pre class="tree-mini">config-v2/
+├─ setup.sh
+├─ config.sh
+├─ packages/
+│  ├─ arch.txt
+│  └─ ubuntu.txt
+└─ post-install checklist</pre>
+            <div class="idea-list">
+              <div class="idea decision"><span class="badge">setup.sh</span><p>Top-level config block, no prompts, silent by default, rerunnable as sync/update, non-destructive for secrets, overwrite-oriented for config.</p></div>
+              <div class="idea decision"><span class="badge">config.sh</span><p>Shared KEY=value truth, parseable without jq or Python, readable from bash and PowerShell.</p></div>
+              <div class="idea coach"><span class="badge">packages</span><p>Distro-specific manifests absorb naming drift and Ubuntu-specific repository setup for tools like Docker and .NET.</p></div>
+            </div>
+          </div>
+          <div class="repo-box">
+            <h4>repo: dotfiles</h4>
+            <pre class="tree-mini">dotfiles/
+└─ chezmoi-managed state
+   ├─ zsh config
+   ├─ nvim config
+   ├─ tmux config
+   ├─ Windows Terminal config
+   └─ PowerShell profile</pre>
+            <div class="idea-list">
+              <div class="idea decision"><span class="badge">chezmoi</span><p>Owns conflict detection, state memory, machine-specific templating, and apply behaviour.</p></div>
+              <div class="idea coach"><span class="badge">run_once</span><p>tpm bootstrap can live in a chezmoi run_once script; lazy.nvim self-bootstrap stays in init.lua.</p></div>
+              <div class="idea decision"><span class="badge">zsh stack</span><p>zinit + zsh-autosuggestions + fast-syntax-highlighting + fzf-tab + zoxide + starship.</p></div>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <strong>Runtime spine:</strong> single entry via <span class="accent">setup.sh</span> → distro package install → <span class="accent">fnm</span> bootstrap → <span class="accent">chezmoi init --apply</span> → shell/editor/tmux land in place → post-install checklist catches host fonts and similar edges.
+        </div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <span>Source fidelity: every decision and idea in this keepsake comes from the memlog.</span>
+      <span>Topic: public config repo for reproducible dev environments</span>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const app = document.getElementById('app');
+      const toggles = document.querySelectorAll('.toggle');
+      const state = { user: true, coach: true };
+
+      function render() {
+        app.classList.toggle('hidden-user', !state.user);
+        app.classList.toggle('hidden-coach', !state.coach);
+        toggles.forEach(btn => {
+          const kind = btn.dataset.filter;
+          if (kind === 'all') {
+            btn.classList.toggle('active', state.user && state.coach);
+          } else {
+            btn.classList.toggle('active', state[kind]);
+          }
+        });
+      }
+
+      toggles.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const kind = btn.dataset.filter;
+          if (kind === 'all') {
+            state.user = true;
+            state.coach = true;
+          } else {
+            state[kind] = !state[kind];
+            if (!state.user && !state.coach) {
+              state.user = true;
+              state.coach = true;
+            }
+          }
+          render();
+        });
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

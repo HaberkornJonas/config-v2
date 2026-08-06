@@ -1,0 +1,11 @@
+chezmoi
+docker-ce
+docker-compose-plugin
+dotnet-sdk-8.0
+fzf
+git
+neovim
+starship
+tmux
+zoxide
+zsh

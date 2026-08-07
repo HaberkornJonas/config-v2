@@ -3,17 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# --- Guard: config.sh must exist (AC 11) ---
-if [[ ! -f "$SCRIPT_DIR/config.sh" ]]; then
-  echo "ERROR: config.sh not found at $SCRIPT_DIR/config.sh. Please populate config.sh before running setup.sh." >&2
-  exit 1
-fi
+# --- Bootstrap configuration ---
+DOTFILES_REPO="git@github.com:HaberkornJonas/dotfiles.git"
+GIT_USER_NAME="Jonas Haberkorn"
+GIT_USER_EMAIL="jonas@haberkorn.fr"
+GPG_FINGERPRINT="CA09410D7AD0C086893352466E118DFA78A27A9F"
+SSH_KEY_FILE="${HOME}/.ssh/id_rsa"
 
-# --- (1) Source config.sh (AC 1, AD-3, AD-8) ---
-# shellcheck source=config.sh
-source "$SCRIPT_DIR/config.sh"
-
-# --- (2) Detect distro exactly once (AC 2, AD-5) ---
+# --- (1) Detect distro exactly once (AC 2, AD-5) ---
 # shellcheck source=/dev/null
 . /etc/os-release
 DISTRO="${ID:-}"
@@ -21,7 +18,7 @@ DISTRO="${ID:-}"
 # --- (2) Install packages (AC 3) ---
 if [[ "$DISTRO" == "arch" ]]; then
   echo "INFO: Detected Arch Linux — installing packages via pacman."
-  pacman -S --needed --noconfirm - < "$SCRIPT_DIR/packages/arch.txt"
+  pacman -S --needed --noconfirm - < ./packages/arch.txt
 
 elif [[ "$DISTRO" == "ubuntu" ]]; then
   echo "INFO: Detected Ubuntu — adding required apt repositories before package install."
@@ -51,7 +48,7 @@ https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(
 
   echo "INFO: Installing packages via apt."
   apt-get update
-  xargs -a "$SCRIPT_DIR/packages/ubuntu.txt" apt-get install -y
+  xargs -a ./packages/ubuntu.txt apt-get install -y
 
 else
   echo "ERROR: Unsupported distro '$DISTRO'. Supported distros: arch, ubuntu." >&2

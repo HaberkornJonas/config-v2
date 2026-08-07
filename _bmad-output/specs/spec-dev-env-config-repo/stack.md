@@ -52,5 +52,6 @@ Full tool catalog for the reproducible dev-environment setup. Every item here is
 
 ## Scripting convention
 
-- `config.sh` (`KEY=value`) is the single source of truth for all script parameters; scripts read it rather than accepting interactive input.
+- Linux bootstrap configuration is declared inline at the top of `setup.sh`; the script reads those assignments rather than prompting interactively.
+- Each platform entry point keeps its bootstrap configuration alongside the script that uses it.
 - `setup.sh` / `setup.ps1` orchestrate only; they do not own software installs or dotfile state.

@@ -12,13 +12,13 @@ sources:
 
 ## Why
 
-A developer working across multiple Linux machines (WSL/VM on Arch and Ubuntu) wastes significant time and effort re-configuring environments from scratch. The existing toolchain (chezmoi, zsh, fnm, Neovim, tmux, and a curated plugin set) is well-chosen but lacks a reproducible, single-command entry point and a reliable sync mechanism. This spec realizes a two-repo setup — `config-v2` for bootstrap orchestration and a `dotfiles` repo managed by `chezmoi` — so that any fresh machine can reach a fully configured, usable dev state in one command, and any existing machine can be kept in sync with the same command.
+A developer working across multiple Linux machines (WSL/VM on Arch and Ubuntu) wastes significant time and effort re-configuring environments from scratch. The existing toolchain (chezmoi, zsh, fnm, Neovim, tmux, and a curated plugin set) is well-chosen but lacks a reproducible local bootstrap flow and a reliable sync mechanism. This spec realizes a two-repo setup — `config-v2` for bootstrap orchestration and a `dotfiles` repo managed by `chezmoi` — so that any fresh machine can reach a fully configured, usable dev state by installing Git manually, cloning this repo, and running `setup.sh` locally, while any existing machine can be kept in sync with the same local script.
 
 ## Capabilities
 
 - **CAP-1**
-  - **intent:** User can bootstrap a fresh Linux (Arch or Ubuntu) dev environment from zero via a single curl one-liner that runs `chezmoi init --apply`.
-  - **success:** On a fresh machine with no prior configuration, executing the curl one-liner produces a fully configured, usable dev environment without any manual step; the run exits cleanly.
+  - **intent:** User can bootstrap a fresh Linux (Arch or Ubuntu) dev environment from zero by manually installing Git, cloning `config-v2`, and running the local `setup.sh`.
+  - **success:** On a fresh machine with no prior configuration, cloning the repository and executing `./setup.sh` from that checkout produces a fully configured, usable dev environment; the run exits cleanly.
 
 - **CAP-2**
   - **intent:** User can apply and sync dotfiles across machines via `chezmoi`.
@@ -37,7 +37,7 @@ A developer working across multiple Linux machines (WSL/VM on Arch and Ubuntu) w
 - **Public repo:** No secrets are stored; only safe references (e.g. GPG key fingerprint) are permitted in the repository.
 - **Linux-first targets:** WSL/VM on Arch and Ubuntu are the primary targets. Per-distro package manifests (`packages/arch.txt`, `packages/ubuntu.txt`) are required; Arch and Ubuntu differ materially in package names and repo setup (e.g. Docker, .NET).
 - **Same Git identity across machines:** a single identity is configured and must be consistent everywhere.
-- **Fully silent/non-interactive once `config.sh` is prepared:** `config.sh` (`KEY=value`) is the single source of truth for all script parameters; no interactive prompts once config is in place.
+- **Fully silent/non-interactive once the local checkout is ready:** Linux bootstrap configuration lives at the top of `setup.sh`; no interactive prompts occur once the user has cloned the repo and started the script.
 - **Non-destructive for stateful assets:** existing SSH keys must be preserved on every re-run; setup must detect and skip rather than overwrite.
 - **Ownership model:** package managers own software installs; `chezmoi` owns dotfiles, templating, and conflict/state handling; `setup.sh` / `setup.ps1` orchestrate only. Host-only concerns (e.g. Nerd Fonts installation) live on a post-install checklist outside the repo.
 - **Two-repo split:** `config-v2` holds bootstrap/setup logic and package installation; the `dotfiles` repo holds all user config managed by `chezmoi`. The two repos are independent deployables.
@@ -54,7 +54,7 @@ A developer working across multiple Linux machines (WSL/VM on Arch and Ubuntu) w
 
 ## Success signal
 
-A developer on a fresh Arch or Ubuntu machine (WSL or VM) runs the curl one-liner, waits for completion, and has a fully configured, usable dev environment — correct shell, plugins, editor, runtime, and dotfiles in place — without having typed a single additional command. The same developer re-runs setup on an existing machine a week later and the environment updates cleanly, SSH keys intact.
+A developer on a fresh Arch or Ubuntu machine (WSL or VM) manually installs Git, clones the repository, runs `./setup.sh`, waits for completion, and has a fully configured, usable dev environment — correct shell, plugins, editor, runtime, and dotfiles in place. The same developer re-runs setup on an existing machine a week later and the environment updates cleanly, SSH keys intact.
 
 ## Assumptions
 

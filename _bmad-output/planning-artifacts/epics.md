@@ -16,38 +16,38 @@ This document provides the complete epic and story breakdown for config-v2, deco
 
 ### Functional Requirements
 
-FR1: The system shall provide a curl one-liner entry point that fetches and executes `setup.sh` from `config-v2` to bootstrap a fresh Linux dev environment in a single command.
+FR1: The system shall require the user to install Git manually, clone `config-v2`, and run `setup.sh` from that local checkout to bootstrap a fresh Linux dev environment.
 FR2: `setup.sh` shall detect the Linux distro exactly once via `/etc/os-release` and select the correct package manifest (`packages/arch.txt` for Arch, `packages/ubuntu.txt` for Ubuntu) and the appropriate package manager (`pacman` or `apt`).
 FR3: `setup.sh` shall install all packages from the selected distro manifest using the distro's package manager.
 FR4: `setup.sh` shall invoke `chezmoi init --apply $DOTFILES_REPO` after package installation, applying all user dotfiles from the separate dotfiles repo.
-FR5: `config.sh` shall define the exhaustive canonical key schema with keys: `DOTFILES_REPO`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GPG_FINGERPRINT`, `SSH_KEY_FILE`; every key any script reads must be declared in `config.sh`. `config.sh` is tracked in git (all stored values are safe public references — no secrets).
-FR6: `config.sh` shall be the sole source of all configurable runtime values at script execution time; no script may prompt interactively or hardcode values.
+FR5: `setup.sh` shall define the exhaustive canonical Linux bootstrap key schema with keys: `DOTFILES_REPO`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GPG_FINGERPRINT`, `SSH_KEY_FILE`; every Linux bootstrap key `setup.sh` reads must be declared in that inline configuration block.
+FR6: The inline bootstrap configuration at the top of `setup.sh` shall be the sole source of Linux bootstrap runtime values; the script may not prompt interactively for those values.
 FR7: Before writing to any stateful user asset (SSH keys at path declared in `SSH_KEY_FILE`, GPG keys), `setup.sh` shall test for presence; if present, skip with a human-readable log message and do not overwrite.
 FR8: Re-running `setup.sh` on an already-configured machine shall update the environment cleanly, exit without errors, and leave existing SSH keys and GPG keys untouched (idempotent).
 FR9: User can apply and sync dotfiles across registered machines via `chezmoi apply`; the operation shall be idempotent across repeated runs (chezmoi-side; config-v2 enables this by ensuring chezmoi is installed and seeded).
 FR10: `setup.ps1` shall bootstrap a Windows companion environment by delegating package installs to Scoop and winget, installing the defined Windows tool set without requiring manual steps beyond the initial script invocation.
 FR11: Package manifests (`packages/arch.txt`, `packages/ubuntu.txt`) shall list one package name per line in plaintext; no version pins unless a specific version is required.
-FR12: The repository source tree shall match the defined structure: `setup.sh`, `setup.ps1`, `config.sh` (tracked), `packages/arch.txt`, `packages/ubuntu.txt`.
+FR12: The repository source tree shall match the defined structure: `setup.sh`, `setup.ps1`, `packages/arch.txt`, `packages/ubuntu.txt`, with Linux bootstrap configuration stored inside `setup.sh`.
 
 ### NonFunctional Requirements
 
 NFR1: **Security / Public repo** — No secrets, credentials, passwords, or private keys may be committed; only safe references (GPG fingerprint, username, public repo URLs) are permitted in tracked files.
 NFR2: **Platform coverage** — Bootstrap must support both Arch Linux and Ubuntu (WSL and VM targets) as first-class environments.
-NFR3: **Non-interactive** — Once `config.sh` is in place, the entire bootstrap is fully silent and non-interactive; no prompts during execution.
+NFR3: **Non-interactive** — Once the repo is cloned locally, the Linux bootstrap is fully silent and non-interactive; no prompts during execution.
 NFR4: **Non-destructive** — Stateful user assets (SSH keys, GPG keys) are never overwritten on any re-run; detect-before-mutate is mandatory.
 NFR5: **Two-repo boundary** — `config-v2` and the dotfiles repo are independently deployable; `config-v2` contains no files managed by chezmoi; no chezmoi-managed file may reside in this repo.
 NFR6: **Deterministic managed config** — chezmoi-managed files are always overwritten on `chezmoi apply`; no soft-merge for managed config.
 NFR7: **Delegation principle** — `setup.sh` and `setup.ps1` are orchestrators only; they must not implement package install/remove or dotfile state logic — those belong to package managers and chezmoi respectively.
-NFR8: **Fixed execution order** — Bootstrap execution order is immutable: (1) source `config.sh`, (2) install packages, (3) `chezmoi init --apply`.
+NFR8: **Fixed execution order** — Bootstrap execution order is immutable: (1) load the bootstrap configuration declared at the top of `setup.sh`, (2) install packages, (3) `chezmoi init --apply`.
 
 ### Additional Requirements
 
 From Architecture Spine (AD-1 through AD-9):
 
-- **Boundary enforcement (AD-1):** `config-v2` contains only bootstrap scripts, package manifests, `config.sh`, and Windows tooling. No file managed by chezmoi may reside here.
+- **Boundary enforcement (AD-1):** `config-v2` contains only bootstrap scripts, package manifests, and Windows tooling. No file managed by chezmoi may reside here.
 - **Distro dispatch isolation (AD-5):** Distro is detected exactly once; all distro-specific commands live inside guarded branches keyed to that result. Shared logic is distro-agnostic.
 - **Stateful-asset vs. chezmoi-managed declaration (AD-7):** Every writable file path must be declared in exactly one category — `stateful-asset` (detect-before-mutate, never chezmoi-managed) or `chezmoi-managed` (always overwritten on apply, never touched by `setup.sh`). `SSH_KEY_FILE` is a stateful-asset; `~/.ssh/config` is chezmoi-managed only.
-- **config.sh as exhaustive schema (AD-8):** Any new key a script reads must be added to `config.sh` before use in any script. No key may be invented at runtime inside a script.
+- **Bootstrap config as exhaustive schema (AD-8):** Any new Linux bootstrap key `setup.sh` reads must be added to the inline configuration block in `setup.sh` before use. No key may be invented at runtime inside the script.
 - **Stack decision:** `fast-syntax-highlighting` has been superseded by `zsh-users/zsh-syntax-highlighting` as the syntax highlighting plugin. Use `zsh-users/zsh-syntax-highlighting` when authoring the zinit plugin list in the dotfiles repo.
 - **Deferred / out of scope for config-v2:** Error handling patterns, CI pipeline beyond Ubuntu, chezmoi template design (dotfiles repo concern), per-distro install ordering/retry logic, YubiKey SSH bridge, Mac support, Windows WSL2 user bootstrap.
 - **No starter/greenfield template** — all files are authored from scratch.
@@ -60,12 +60,12 @@ N/A — This is a CLI/shell scripting project with no user interface.
 
 | FR | Epic | Brief description |
 |---|---|---|
-| FR1 | Epic 1 | curl one-liner entry point → fetches & executes setup.sh |
+| FR1 | Epic 1 | manual Git install + clone + local setup.sh entry point |
 | FR2 | Epic 1 | Distro detection once via /etc/os-release → selects manifest + package manager |
 | FR3 | Epic 1 | Installs packages from distro manifest via pacman/apt |
 | FR4 | Epic 1 | Invokes chezmoi init --apply after package install |
-| FR5 | Epic 1 | config.sh with 5 canonical keys, tracked in git |
-| FR6 | Epic 1 | config.sh as sole param source; fully non-interactive |
+| FR5 | Epic 1 | inline setup.sh bootstrap configuration with 5 canonical keys |
+| FR6 | Epic 1 | inline setup.sh bootstrap configuration as sole Linux param source |
 | FR7 | Epic 1 | Detect-before-mutate for SSH/GPG stateful assets |
 | FR8 | Epic 1 | Idempotent re-run — updates cleanly, SSH keys intact |
 | FR9 | Epic 1 | chezmoi apply syncs dotfiles idempotently (config-v2 enables via install + seed) |
@@ -76,7 +76,7 @@ N/A — This is a CLI/shell scripting project with no user interface.
 ## Epic List
 
 ### Epic 1: Linux Bootstrap
-The developer can bootstrap or re-bootstrap a fully configured Linux dev environment in a single command — safely, non-interactively, and idempotently.
+The developer can bootstrap or re-bootstrap a fully configured Linux dev environment from a local checkout — safely, non-interactively, and idempotently.
 **FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, FR9, FR11, FR12 (partial)
 
 ### Epic 2: Windows Companion Bootstrap
@@ -87,28 +87,24 @@ The developer can bootstrap a Windows companion environment by running `setup.ps
 
 ## Epic 1: Linux Bootstrap
 
-The developer can bootstrap or re-bootstrap a fully configured Linux dev environment in a single command — safely, non-interactively, and idempotently.
+The developer can bootstrap or re-bootstrap a fully configured Linux dev environment from a local checkout — safely, non-interactively, and idempotently.
 
-### Story 1.1: Create config.sh Parameter File
+### Story 1.1: Define setup.sh Bootstrap Configuration
 
 As a developer,
-I want a tracked `config.sh` committed directly to the repo with my actual values,
-So that all scripts have a single, reliable source for runtime parameters without any manual setup step.
+I want `setup.sh` to declare its Linux bootstrap configuration inline at the top of the script,
+So that the local Linux bootstrap has a single, reliable source for runtime parameters without an extra config file.
 
 **Acceptance Criteria:**
 
-**Given** the repository root,
-**When** I inspect `config.sh`,
-**Then** all 5 canonical keys are declared with real values in `KEY=value` bash-sourceable format: `DOTFILES_REPO`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GPG_FINGERPRINT`, `SSH_KEY_FILE` (AD-3, AD-8)
+**Given** `setup.sh`,
+**When** I inspect the bootstrap configuration declared at the top of the script,
+**Then** all 5 canonical keys are assigned with real values in bash syntax: `DOTFILES_REPO`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GPG_FINGERPRINT`, `SSH_KEY_FILE` (AD-3, AD-8)
 **And** no actual secrets, passwords, or private keys are present — only safe public references (AD-6, NFR1)
 
-**Given** `config.sh` committed to the repo,
-**When** I run `git status`,
-**Then** `config.sh` is tracked (no `.gitignore` entry suppressing it)
-
-**Given** `config.sh`,
+**Given** `setup.sh`,
 **When** any script reads a configurable value,
-**Then** it sources `config.sh` and reads from it — no hardcoded values in scripts, no interactive prompts (FR6, AD-3)
+**Then** the Linux bootstrap reads the inline assignments from `setup.sh` — no separate Linux config file, no interactive prompts (FR6, AD-3)
 
 ---
 
@@ -172,9 +168,9 @@ So that my machine is fully configured non-interactively with all stateful asset
 
 **Acceptance Criteria:**
 
-**Given** a machine with `config.sh` present,
+**Given** a local checkout of `config-v2`,
 **When** `setup.sh` runs,
-**Then** it executes in fixed order: (1) `source config.sh`, (2) install packages, (3) `chezmoi init --apply $DOTFILES_REPO` — no deviation (AD-9, NFR8)
+**Then** it executes in fixed order: (1) load the bootstrap configuration declared at the top of `setup.sh`, (2) install packages, (3) `chezmoi init --apply $DOTFILES_REPO` — no deviation (AD-9, NFR8)
 
 **Given** `setup.sh` detecting the distro via `/etc/os-release`,
 **When** I audit the script,
@@ -186,7 +182,7 @@ So that my machine is fully configured non-interactively with all stateful asset
 
 **Given** any step in `setup.sh`,
 **When** I audit for interactive prompts,
-**Then** there are none — all values come from `config.sh`; the script is fully silent (FR6, NFR3)
+**Then** there are none — all Linux bootstrap values come from the inline configuration block in `setup.sh`; the script is fully silent (FR6, NFR3)
 
 **Given** a machine where `$SSH_KEY_FILE` already exists,
 **When** `setup.sh` runs,
@@ -212,9 +208,9 @@ So that my machine is fully configured non-interactively with all stateful asset
 **When** `setup.sh` reaches the distro dispatch,
 **Then** it exits immediately with a clear error message stating the detected distro is not supported
 
-**Given** `config.sh` is absent when `setup.sh` runs,
+**Given** `setup.sh` is run outside a proper local checkout or repository assets are missing,
 **When** the script executes,
-**Then** it exits immediately with a clear error message directing the user to populate `config.sh`
+**Then** it exits immediately with a clear error message directing the user to install Git manually, clone the repo locally, and run `./setup.sh` from that checkout
 
 **Given** `setup.sh` running on Ubuntu,
 **When** it reaches the package installation step,
@@ -226,18 +222,18 @@ So that my machine is fully configured non-interactively with all stateful asset
 
 ---
 
-### Story 1.5: Create README with Curl One-Liner and Usage Guide
+### Story 1.5: Create README with Local Bootstrap Usage Guide
 
 As a developer discovering or returning to this repo,
 I want a clear README that tells me exactly how to use the bootstrap,
-So that I can set up a new machine with a single copy-paste command and understand the two-repo model.
+So that I can install Git, clone the repo, run `setup.sh` locally, and understand the two-repo model.
 
 **Acceptance Criteria:**
 
 **Given** `README.md`,
 **When** I read the quick-start section,
-**Then** it contains the exact curl one-liner command to bootstrap a fresh Linux machine
-**And** it notes that `config.sh` values should be verified/updated before running the one-liner
+**Then** it tells me to install Git manually, clone `config-v2`, `cd` into the checkout, and run `./setup.sh`
+**And** it explains that the supported Linux bootstrap path is the local checkout flow
 
 **Given** `README.md`,
 **When** I read the Windows section,
@@ -276,7 +272,7 @@ So that my Windows environment is bootstrapped without any manual steps beyond r
 
 **Given** `setup.ps1`,
 **When** it reads configurable values (e.g. `DOTFILES_REPO`),
-**Then** it parses `config.sh` line-by-line using a `foreach` loop, extracting `KEY=value` pairs and loading them as PowerShell variables — no hardcoded values (AD-3, FR6)
+**Then** it declares or loads its bootstrap configuration alongside the entry point using the same canonical key names, with no hardcoded per-machine prompts (AD-3, FR6)
 
 **Given** Scoop is not yet installed on the machine,
 **When** `setup.ps1` runs,

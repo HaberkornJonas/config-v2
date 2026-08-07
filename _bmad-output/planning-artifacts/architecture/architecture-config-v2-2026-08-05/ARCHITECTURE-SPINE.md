@@ -7,7 +7,7 @@ paradigm: delegation pipeline
 scope: config-v2 bootstrap repository and its boundary with the dotfiles repo
 status: final
 created: 2026-08-05
-updated: 2026-08-05T08:45
+updated: 2026-08-07T08:28
 binds: [CAP-1, CAP-2, CAP-3, CAP-4]
 sources:
   - _bmad-output/specs/spec-dev-env-config-repo/SPEC.md
@@ -24,7 +24,7 @@ companions:
 
 ```
 Stages:
-  1. Entry point  → curl one-liner (fetch + execute setup.sh)
+  1. Entry point  → manual Git install + local checkout + execute setup.sh
   2. Orchestrate  → setup.sh / setup.ps1 (sequence only; own nothing)
   3. Packages     → pacman / apt / scoop / winget (own installs)
   4. Dotfiles     → chezmoi (own user config state, templating, conflict resolution)
@@ -36,7 +36,7 @@ Stages:
 
 - **Binds:** all, structural seed
 - **Prevents:** dotfile config leaking into `config-v2`; bootstrap logic appearing in the `dotfiles` repo
-- **Rule:** `config-v2` contains only bootstrap scripts (`setup.sh`, `setup.ps1`), package manifests (`packages/`), the parameter file (`config.sh`), and Windows tooling. All user dotfile config lives in the `dotfiles` repo and is applied exclusively by chezmoi. No file managed by chezmoi may reside in `config-v2`.
+- **Rule:** `config-v2` contains only bootstrap scripts (`setup.sh`, `setup.ps1`), package manifests (`packages/`), and Windows tooling. All user dotfile config lives in the `dotfiles` repo and is applied exclusively by chezmoi. No file managed by chezmoi may reside in `config-v2`.
 
 ### AD-2 — Orchestrator delegates, never owns [ADOPTED]
 
@@ -44,11 +44,11 @@ Stages:
 - **Prevents:** setup scripts re-implementing package-install or dotfile-state logic; orchestration-layer bloat
 - **Rule:** `setup.sh` and `setup.ps1` invoke their delegates and exit. They must not implement package install/remove (owned by pacman/apt/scoop/winget), dotfile state or conflict resolution (owned by chezmoi), or user-config templating (owned by chezmoi). Any logic that belongs inside a delegate must live there.
 
-### AD-3 — `config.sh` as sole parameter source [ADOPTED]
+### AD-3 — Bootstrap configuration lives with the entry point [ADOPTED]
 
 - **Binds:** CAP-1, CAP-3, CAP-4, `setup.sh`, `setup.ps1`
 - **Prevents:** interactive prompts mid-run; hard-coded user values; parameter sources scattered across scripts
-- **Rule:** All configurable runtime values (Git identity, GPG fingerprint, dotfiles repo URL, feature flags) are declared in `config.sh` (KEY=value, bash-sourceable). `config.sh` is tracked in git; it must contain only safe public references (GPG fingerprint, usernames, public repo URLs — no secrets, passwords, or private keys). Scripts source `config.sh` at start and read only from it. No script may prompt interactively once `config.sh` is in place.
+- **Rule:** All configurable runtime values (Git identity, GPG fingerprint, dotfiles repo URL, feature flags) are declared alongside the bootstrap entry point that uses them. On Linux, `setup.sh` declares these values inline at the top of the script and reads only from that block. Any companion Windows bootstrap configuration must likewise live with `setup.ps1`. No script may prompt interactively once its local bootstrap configuration is in place.
 
 ### AD-4 — Detect-before-mutate for stateful assets [ADOPTED]
 
@@ -66,19 +66,19 @@ Stages:
 
 - **Binds:** all; constraint: public repo
 - **Prevents:** accidental credential exposure in a public repository
-- **Rule:** No secret, credential, password, or private key may be committed to `config-v2`. Only non-secret references (e.g. GPG fingerprint, username, public repo URLs) are permitted in tracked files. `config.sh` is tracked and follows this rule — all values in it must be safe public references only.
+- **Rule:** No secret, credential, password, or private key may be committed to `config-v2`. Only non-secret references (e.g. GPG fingerprint, username, public repo URLs) are permitted in tracked files. Any bootstrap configuration embedded in `setup.sh` or declared next to `setup.ps1` must follow this rule.
 
 ### Dependency direction
 
 ```mermaid
 graph LR
     O["Orchestration\n(setup.sh / setup.ps1)"]
-    CFG["config.sh\n(parameters)"]
+    CFG["bootstrap config\n(inline / companion)"]
     PKG["Package managers\n(pacman / apt / scoop / winget)"]
     CM["chezmoi"]
     DF["dotfiles repo\n(separate)"]
 
-    O -->|sources| CFG
+    O -->|loads| CFG
     O -->|invokes| PKG
     O -->|invokes| CM
     CM -->|applies from| DF
@@ -90,19 +90,19 @@ No upward dependency is permitted. Delegates must not call back into orchestrati
 
 - **Binds:** CAP-2, CAP-3, setup.sh, chezmoi, dotfiles repo
 - **Prevents:** the same file path being guarded (skip-if-present) by setup.sh and simultaneously always-overwritten by chezmoi, causing non-deterministic machine state depending on execution order
-- **Rule:** Every file path that either setup.sh writes or chezmoi manages must be declared in exactly one category: `stateful-asset` (detect-before-mutate, never chezmoi-managed) or `chezmoi-managed` (always-overwritten on apply, never touched by setup.sh). No path may belong to both. The canonical SSH key filename is declared in `config.sh` (`SSH_KEY_FILE`) and referenced identically in setup.sh and any chezmoi dotfile template; `~/.ssh/config` is chezmoi-managed only.
+- **Rule:** Every file path that either setup.sh writes or chezmoi manages must be declared in exactly one category: `stateful-asset` (detect-before-mutate, never chezmoi-managed) or `chezmoi-managed` (always-overwritten on apply, never touched by setup.sh). No path may belong to both. The canonical SSH key filename is declared in bootstrap configuration (`SSH_KEY_FILE`) and referenced identically in setup.sh and any chezmoi dotfile template; `~/.ssh/config` is chezmoi-managed only.
 
-### AD-8 — `config.sh` is the exhaustive canonical key schema [ADOPTED]
+### AD-8 — Bootstrap configuration is the exhaustive canonical key schema [ADOPTED]
 
-- **Binds:** CAP-1, CAP-3, CAP-4, setup.sh, setup.ps1, config.sh
+- **Binds:** CAP-1, CAP-3, CAP-4, setup.sh, setup.ps1
 - **Prevents:** setup.sh and setup.ps1 reading the same conceptual value under different key names; silent empty-string failures when a key exists on one platform but not the other
-- **Rule:** Every key any script reads must be declared verbatim in `config.sh`. No key may be invented inside a script at runtime. Canonical required keys: `DOTFILES_REPO`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GPG_FINGERPRINT`, `SSH_KEY_FILE`. Any new script-read key must first be added to `config.sh`.
+- **Rule:** Every key any bootstrap script reads must be declared verbatim in bootstrap configuration. No key may be invented inside a script at runtime. Canonical required keys: `DOTFILES_REPO`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GPG_FINGERPRINT`, `SSH_KEY_FILE`. Any new script-read key must first be added to the entry point configuration that owns it.
 
 ### AD-9 — Bootstrap execution order [ADOPTED]
 
 - **Binds:** CAP-1, setup.sh
 - **Prevents:** package installs and dotfile application running in an undefined or reversed order, causing chezmoi templates to reference tools not yet installed; prevents setup.sh and a dotfiles `run_once_` script from both owning the bootstrap sequence
-- **Rule:** The curl one-liner fetches and executes `setup.sh` from `config-v2`. `setup.sh` is the master orchestrator and runs in this fixed order: (1) source `config.sh`, (2) install packages via the distro package manager, (3) invoke `chezmoi init --apply`. The dotfiles repo must not contain a `run_once_` script that re-triggers package installation or replaces `setup.sh`'s orchestration role.
+- **Rule:** The supported Linux entry point is a local checkout of `config-v2`; the user installs Git manually, clones the repo, and executes `setup.sh` from that checkout. `setup.sh` is the master orchestrator and runs in this fixed order: (1) load inline bootstrap configuration, (2) install packages via the distro package manager, (3) invoke `chezmoi init --apply`. The dotfiles repo must not contain a `run_once_` script that re-triggers package installation or replaces `setup.sh`'s orchestration role.
 
 ## Consistency Conventions
 
@@ -110,12 +110,12 @@ No upward dependency is permitted. Delegates must not call back into orchestrati
 | --- | --- |
 | Naming (files) | lowercase, hyphen-separated for script names; distro names match `/etc/os-release` `ID` field (`arch`, `ubuntu`) |
 | Package manifests | one package name per line, plaintext; no version pins unless a specific version is required |
-| Config format | `config.sh` — `KEY=value` pairs, bash-sourceable; no spaces around `=` |
+| Config format | Linux bootstrap config is declared inline in `setup.sh` as bash assignments; companion platform config lives beside its entry point |
 | Stateful-asset guard | test with `-f`/`-d` before any write to SSH/GPG paths; emit a human-readable skip message |
-| Stateful vs. managed boundary | each writable path belongs to exactly one category; declared in AD-7; SSH key file declared in `config.sh` as `SSH_KEY_FILE`; `~/.ssh/config` is chezmoi-managed |
-| config.sh key naming | canonical keys in `config.sh` (AD-8); new keys added to `config.sh` before use in any script |
+| Stateful vs. managed boundary | each writable path belongs to exactly one category; declared in AD-7; SSH key file declared in bootstrap config as `SSH_KEY_FILE`; `~/.ssh/config` is chezmoi-managed |
+| Bootstrap key naming | canonical keys in bootstrap configuration (AD-8); new keys added before use in any script |
 | Managed config | repo-owned files applied by chezmoi are always overwritten; no soft-merge for tracked content |
-| Secrets | never committed; `config.sh` is tracked but must contain only safe public references (GPG fingerprint, usernames, public repo URLs); no passwords, credentials, or private keys in any tracked file |
+| Secrets | never committed; tracked bootstrap configuration must contain only safe public references (GPG fingerprint, usernames, public repo URLs); no passwords, credentials, or private keys in any tracked file |
 
 ## Stack
 
@@ -145,9 +145,9 @@ No upward dependency is permitted. Delegates must not call back into orchestrati
 ```mermaid
 graph TD
     dev["Developer"]
-    curl["curl one-liner"]
+    checkout["manual Git install\n+ local checkout"]
     setup_sh["setup.sh\n(config-v2)"]
-    config_sh["config.sh\n(parameters, tracked)"]
+    config_block["bootstrap config\n(inline in setup.sh)"]
     packages["packages/\narch.txt · ubuntu.txt\n(config-v2)"]
     pkg_mgr["pacman / apt"]
     chezmoi["chezmoi"]
@@ -155,9 +155,9 @@ graph TD
     setup_ps1["setup.ps1\n(config-v2)"]
     pkg_win["scoop / winget"]
 
-    dev -->|"Linux: run"| curl
-    curl -->|"fetch & execute"| setup_sh
-    setup_sh -->|"sources"| config_sh
+    dev -->|"Linux: prepare"| checkout
+    checkout -->|"run"| setup_sh
+    setup_sh -->|"loads"| config_block
     setup_sh -->|"reads"| packages
     setup_sh -->|"invokes"| pkg_mgr
     setup_sh -->|"chezmoi init --apply"| chezmoi
@@ -171,15 +171,15 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant dev as Developer
-    participant entry as curl one-liner
+    participant entry as local checkout
     participant setup as setup.sh
     participant pkg as pacman / apt
     participant cm as chezmoi
     participant df as dotfiles repo
 
     dev->>entry: execute
-    entry->>setup: fetch & run (from config-v2)
-    setup->>setup: (1) source config.sh
+    entry->>setup: run from cloned repo
+    setup->>setup: (1) load inline bootstrap config
     setup->>setup: (2) detect distro (/etc/os-release)
     setup->>pkg: (3) install packages (arch.txt or ubuntu.txt)
     setup->>cm: (4) chezmoi init --apply $DOTFILES_REPO
@@ -192,9 +192,8 @@ sequenceDiagram
 
 ```text
 config-v2/
-  setup.sh              # Linux bootstrap orchestrator: source config.sh → install packages → chezmoi init --apply (AD-9)
-  setup.ps1             # Windows bootstrap orchestrator (sources config equivalents; delegates to scoop/winget)
-  config.sh             # [tracked] sole param source; canonical keys (AD-8): DOTFILES_REPO, GIT_USER_NAME, GIT_USER_EMAIL, GPG_FINGERPRINT, SSH_KEY_FILE — safe public values only (AD-6)
+  setup.sh              # Linux bootstrap orchestrator: load inline config → install packages → chezmoi init --apply (AD-9)
+  setup.ps1             # Windows bootstrap orchestrator (keeps config alongside the entry point; delegates to scoop/winget)
   packages/
     arch.txt            # Arch package manifest (one package per line)
     ubuntu.txt          # Ubuntu package manifest (one package per line)

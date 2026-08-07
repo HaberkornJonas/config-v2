@@ -4,7 +4,7 @@ baseline_commit: f4652943679e1384ce739a1a0f4b2f65cc24c6cd
 
 # Story 1.4: Implement setup.sh Bootstrap Orchestrator
 
-Status: review
+Status: done
 
 ## Story
 

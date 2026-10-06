@@ -5,6 +5,7 @@ dotnet-sdk
 fzf
 git
 neovim
+openssh
 starship
 tmux
 unzip

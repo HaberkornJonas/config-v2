@@ -7,5 +7,6 @@ git
 neovim
 starship
 tmux
+unzip
 zoxide
 zsh

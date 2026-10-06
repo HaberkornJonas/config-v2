@@ -7,8 +7,15 @@
 Install Git manually first, then clone this repository and run the Linux bootstrap from the local checkout:
 
 ```bash
+# Arch
+pacman -Syu
+pacman -S git
+```
+
+```bash
 git clone https://github.com/HaberkornJonas/config-v2.git
 cd config-v2
+chmod +x ./setup.sh
 ./setup.sh
 ```
 

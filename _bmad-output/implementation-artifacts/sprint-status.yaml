@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-05T10:48:25+02:00
-last_updated: 2026-10-07T09:40:00+02:00
+last_updated: 2026-10-07T13:52:06+02:00
 project: config-v2
 project_key: NOKEY
 tracking_system: file-system
@@ -60,7 +60,7 @@ development_status:
   # Epic 2: Integrated Linux Bootstrap and Dotfiles Sync
   epic-2: in-progress
   2-1-create-an-in-repo-dotfiles-source-tree: done
-  2-2-apply-local-dotfiles-from-setup-sh: backlog
+  2-2-apply-local-dotfiles-from-setup-sh: done
   2-3-preserve-stateful-asset-safety-in-the-integrated-flow: backlog
   2-4-add-smoke-verification-for-integrated-bootstrap: backlog
   2-5-refresh-linux-facing-documentation-and-readme-validation: backlog
@@ -68,6 +68,6 @@ development_status:
 
   # Epic 3: Windows Companion Alignment
   epic-3: in-progress
-  3-1-align-setup-ps1-with-shared-repository-contract: ready-for-dev  # implement after 2-1 and 2-2
+  3-1-align-setup-ps1-with-shared-repository-contract: in-progress  # implement after 2-1 and 2-2
   3-2-document-the-windows-companion-path-under-the-new-model: backlog
   epic-3-retrospective: optional

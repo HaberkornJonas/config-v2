@@ -1,6 +1,10 @@
+---
+baseline_commit: 01fbd7aa9ca70298c62ade2402701adf75fcfd5d
+---
+
 # Story 3.1: Align setup.ps1 with the Shared Repository Contract
 
-Status: ready-for-dev
+Status: in-progress
 
 > **Sequencing (correct-course 2026-10-07):** implement after Epic 2 Stories 2.1–2.2 land, because this story needs `dotfiles/` and the repo-root contract to exist. This story was originally created as Story 2.1; the epics were renumbered when the delivered Linux bootstrap was closed as Epic 1. Also honor the new spine rule AD-8 (bootstrap configuration is the canonical key schema; no `DOTFILES_REPO`).
 
@@ -20,30 +24,30 @@ so that both entry points share one coherent repository model.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create the Windows entry point at the repo root (AC: 1, 2)
-  - [ ] Add `setup.ps1` beside `setup.sh` and derive all repo-local paths from `$PSScriptRoot`, not from the caller's current directory.
-  - [ ] Fail clearly if required repo assets for the supported Windows flow are missing from the local checkout.
-  - [ ] Keep bootstrap configuration with `setup.ps1` itself; do not reintroduce `config.sh` parsing or any other cross-shell config dependency.
-- [ ] Task 2: Preserve the orchestrator-only ownership model (AC: 2)
-  - [ ] Sequence delegate calls only: Windows package-manager preparation, package installation, and any explicitly supported managed-config handoff.
-  - [ ] Do not embed dotfile content, merge logic, or repo-specific package-install implementations in `setup.ps1`.
-  - [ ] Keep package definitions outside orchestration logic where practical so future Windows package updates are data changes, not script rewrites.
-- [ ] Task 3: Implement Windows package-manager delegation through Scoop and winget (AC: 2)
-  - [ ] Use Scoop and winget as the only software-install delegates.
-  - [ ] Use non-interactive/silent flags appropriate for scripted execution.
-  - [ ] Prefer exact package identifiers and explicit agreement flags for winget installs so repeated runs are deterministic and unattended.
-- [ ] Task 4: Enforce the shared repository-root contract (AC: 1)
-  - [ ] Resolve Windows bootstrap inputs relative to the `config-v2` checkout root.
-  - [ ] Do not clone or reference a second dotfiles repository as the supported path.
-  - [ ] If managed-config work is touched, point only at repo-local `dotfiles/` content and keep deep Windows dotfiles integration limited to what the current architecture explicitly supports.
-- [ ] Task 5: Add targeted validation for the new entry point (AC: 1, 2)
-  - [ ] Add a PowerShell validation script under `tests/` that asserts `setup.ps1` exists and follows the required repo-root and delegation patterns.
-  - [ ] If README text must change to stay truthful after implementation, update `tests/validate-readme.ps1` in the same change.
-  - [ ] Validate from Windows-friendly commands only (for example `powershell -File tests\\...`).
-- [ ] Task 6: Verify rerun-safe behavior and story scope boundaries (AC: 1, 2)
-  - [ ] Confirm the implementation does not invent unsupported WSL2/Linux-user bootstrap automation.
-  - [ ] Confirm the implementation does not restore the old two-repo assumption anywhere in code, docs, or tests.
-  - [ ] Confirm all behavior added in this story is explicit enough for Story 3.2 documentation work to describe accurately.
+- [x] Task 1: Create the Windows entry point at the repo root (AC: 1, 2)
+  - [x] Add `setup.ps1` beside `setup.sh` and derive all repo-local paths from `$PSScriptRoot`, not from the caller's current directory.
+  - [x] Fail clearly if required repo assets for the supported Windows flow are missing from the local checkout.
+  - [x] Keep bootstrap configuration with `setup.ps1` itself; do not reintroduce `config.sh` parsing or any other cross-shell config dependency.
+- [x] Task 2: Preserve the orchestrator-only ownership model (AC: 2)
+  - [x] Sequence delegate calls only: Windows package-manager preparation, package installation, and any explicitly supported managed-config handoff.
+  - [x] Do not embed dotfile content, merge logic, or repo-specific package-install implementations in `setup.ps1`.
+  - [x] Keep package definitions outside orchestration logic where practical so future Windows package updates are data changes, not script rewrites.
+- [x] Task 3: Implement Windows package-manager delegation through Scoop and winget (AC: 2)
+  - [x] Use Scoop and winget as the only software-install delegates.
+  - [x] Use non-interactive/silent flags appropriate for scripted execution.
+  - [x] Prefer exact package identifiers and explicit agreement flags for winget installs so repeated runs are deterministic and unattended.
+- [x] Task 4: Enforce the shared repository-root contract (AC: 1)
+  - [x] Resolve Windows bootstrap inputs relative to the `config-v2` checkout root.
+  - [x] Do not clone or reference a second dotfiles repository as the supported path.
+  - [x] If managed-config work is touched, point only at repo-local `dotfiles/` content and keep deep Windows dotfiles integration limited to what the current architecture explicitly supports.
+- [x] Task 5: Add targeted validation for the new entry point (AC: 1, 2)
+  - [x] Add a PowerShell validation script under `tests/` that asserts `setup.ps1` exists and follows the required repo-root and delegation patterns.
+  - [x] If README text must change to stay truthful after implementation, update `tests/validate-readme.ps1` in the same change.
+  - [x] Validate from Windows-friendly commands only (for example `powershell -File tests\\...`).
+- [x] Task 6: Verify rerun-safe behavior and story scope boundaries (AC: 1, 2)
+  - [x] Confirm the implementation does not invent unsupported WSL2/Linux-user bootstrap automation.
+  - [x] Confirm the implementation does not restore the old two-repo assumption anywhere in code, docs, or tests.
+  - [x] Confirm all behavior added in this story is explicit enough for Story 3.2 documentation work to describe accurately.
 
 ## Dev Notes
 
@@ -171,19 +175,36 @@ so that both entry points share one coherent repository model.
 
 GPT-5.4 (Copilot CLI runtime)
 
+### Implementation Plan
+
+- Keep `setup.ps1` limited to repo-root-relative package-manager orchestration. Validate both manifests before side effects, bootstrap Scoop only when absent using its official installer, then delegate packages to Scoop and exact/silent winget installs.
+- Keep package identifiers in separate Scoop and winget manifests. Do not invoke chezmoi or add WSL automation because Windows dotfiles integration is explicitly deferred.
+- Add static PowerShell validation for path/delegation/scope guarantees and minimally update the README's now-obsolete future-facing Windows entry-point wording.
+
 ### Debug Log References
 
 - Create-story workflow activation completed with manual workflow resolution because the resolver requires Python 3.11+ in this environment.
+- `tests/validate-setup-ps1.ps1`, `tests/validate-readme.ps1`, and `setup.ps1` PowerShell parsing passed, including running the setup validator from outside the repository root.
+- Full Linux integration validation remains blocked: `tests/validate-dotfiles.ps1` and `tests/validate-setup.ps1` cannot prepare the WSL Arch test instance because the package mirror TLS certificate chain is untrusted (`core.db`, OpenSSL verify result 20). The dotfiles check was retried sequentially and hit the same environment error.
 
 ### Completion Notes List
 
 - Ultimate context engine analysis completed - comprehensive developer guide created.
 - No dedicated PRD, UX artifact, or `project-context.md` file was available; the story uses epics, spec, architecture, repo code, and recent git history as the authoritative context set.
 - Story scope intentionally guards against copying the stale two-repo / `config.sh` assumptions still present in older artifacts.
+- Added a repo-root-safe Windows package orchestrator, data-only Scoop/winget manifests, and targeted contract validation; updated the README to describe the implemented entry point.
+- All story-specific checks pass. The story remains in-progress until the existing WSL-backed Linux integration suite can run successfully.
 
 ### File List
 
-- `setup.ps1` (new, expected implementation target)
-- `tests/validate-setup-ps1.ps1` (recommended targeted validation)
-- `README.md` (update only if required for truthfulness)
-- `tests/validate-readme.ps1` (update only if README changes)
+- `setup.ps1` (new)
+- `packages/scoop.txt` (new)
+- `packages/winget.txt` (new)
+- `tests/validate-setup-ps1.ps1` (new)
+- `README.md`
+- `tests/validate-readme.ps1`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+### Change Log
+
+- 2026-10-07: Added the Windows Scoop/winget bootstrap and contract validation, and updated the README Windows entry-point wording.

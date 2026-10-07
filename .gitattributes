@@ -1,1 +1,3 @@
 dotfiles/** text eol=lf
+setup.sh text eol=lf
+packages/** text eol=lf

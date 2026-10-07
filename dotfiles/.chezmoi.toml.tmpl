@@ -1,6 +1,7 @@
 {{- $gitUserName := env "GIT_USER_NAME" | default "Bootstrap Test User" -}}
 {{- $gitUserEmail := env "GIT_USER_EMAIL" | default "bootstrap-test@example.invalid" -}}
 {{- $gpgFingerprint := env "GPG_FINGERPRINT" -}}
+sourceDir = {{ .chezmoi.sourceDir | quote }}
 [data]
     git_user_name = {{ $gitUserName | quote }}
     git_user_email = {{ $gitUserEmail | quote }}

@@ -50,6 +50,10 @@ if ($failures.Count -eq 0) {
             Pattern = '(?im)^##\s+Windows Companion Bootstrap\s*$'
         },
         @{
+            Label = 'Implemented Windows companion entry point'
+            Pattern = '(?is)Windows companion entry point is `setup\.ps1` in a local checkout of this repo'
+        },
+        @{
             Label = 'Exact Windows companion command'
             Pattern = [regex]::Escape('powershell -ExecutionPolicy Bypass -File .\setup.ps1')
         },
@@ -70,7 +74,6 @@ if ($failures.Count -eq 0) {
     }
 
     $requiredSetupAssignments = @(
-        'DOTFILES_REPO',
         'GIT_USER_NAME',
         'GIT_USER_EMAIL',
         'GPG_FINGERPRINT',

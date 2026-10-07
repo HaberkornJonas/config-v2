@@ -1,0 +1,3 @@
+Git.Git
+Docker.DockerDesktop
+Microsoft.DotNet.SDK.8

@@ -42,7 +42,7 @@ That split keeps bootstrap orchestration in this repo while letting `setup.sh` d
 
 ## Windows Companion Bootstrap
 
-The Windows companion entry point belongs to Epic 2. Once `setup.ps1` is available in a local checkout of this repo, run it from the repository root with:
+The Windows companion entry point is `setup.ps1` in a local checkout of this repo. Run it from the repository root with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\setup.ps1

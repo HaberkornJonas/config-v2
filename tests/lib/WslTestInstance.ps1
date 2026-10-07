@@ -6,6 +6,9 @@ $script:ConfigV2TestInstanceName = 'config-v2-test'
 $script:ConfigV2DataRoot = Join-Path $env:LOCALAPPDATA 'config-v2'
 $script:ConfigV2ImageCache = Join-Path $script:ConfigV2DataRoot 'wsl-cache'
 $script:ConfigV2InstanceLocation = Join-Path (Join-Path $script:ConfigV2DataRoot 'wsl') $script:ConfigV2TestInstanceName
+$script:ConfigV2ZscalerRootCertificatePath = Join-Path $PSScriptRoot '..\certs\zscaler-root-ca.crt'
+# Pin the requested root certificate so a changed asset cannot silently alter the test trust store.
+$script:ConfigV2ZscalerRootCertificateSha256 = '04F61F1D13AAE1D16573DC2C37F796FDF4AC97713A6959EBB11D2473958B1A53'
 $script:WslManifestUrl = 'https://raw.githubusercontent.com/microsoft/WSL/master/distributions/DistributionInfo.json'
 $script:ConfigV2TlsProbeHosts = @('geo.mirror.pkgbuild.com', 'fastly.mirror.pkgbuild.com', 'github.com')
 
@@ -24,6 +27,62 @@ function Invoke-WslExe([string[]]$arguments) {
 function Test-ConfigV2TestInstance {
     $list = Invoke-WslExe @('--list', '--quiet')
     return @($list.Output -split "`r?`n" | ForEach-Object { $_.Trim() }) -contains $script:ConfigV2TestInstanceName
+}
+
+function Get-ConfigV2ZscalerRootCertificate {
+    if (-not (Test-Path -LiteralPath $script:ConfigV2ZscalerRootCertificatePath -PathType Leaf)) {
+        throw "Required Zscaler root CA is missing: $script:ConfigV2ZscalerRootCertificatePath"
+    }
+
+    $pem = [IO.File]::ReadAllText($script:ConfigV2ZscalerRootCertificatePath)
+    if ($pem -notmatch '(?s)\A\s*-----BEGIN CERTIFICATE-----(?<der>.*?)-----END CERTIFICATE-----\s*\z') {
+        throw "Required Zscaler root CA is not a single PEM certificate: $script:ConfigV2ZscalerRootCertificatePath"
+    }
+
+    $certificate = $null
+    try {
+        $der = [Convert]::FromBase64String(($matches['der'] -replace '\s', ''))
+        $certificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new($der)
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            $certificateSha256 = [BitConverter]::ToString($sha256.ComputeHash($certificate.RawData)).Replace('-', '')
+        }
+        finally {
+            $sha256.Dispose()
+        }
+        if ($certificateSha256 -ne $script:ConfigV2ZscalerRootCertificateSha256) {
+            throw "Certificate SHA-256 fingerprint mismatch (expected $script:ConfigV2ZscalerRootCertificateSha256, got $certificateSha256)."
+        }
+
+        $now = [DateTime]::UtcNow
+        if ($now -lt $certificate.NotBefore.ToUniversalTime() -or $now -gt $certificate.NotAfter.ToUniversalTime()) {
+            throw "Certificate is outside its validity period ($($certificate.NotBefore.ToUniversalTime().ToString('u')) through $($certificate.NotAfter.ToUniversalTime().ToString('u')))."
+        }
+
+        $isCertificateAuthority = $false
+        foreach ($extension in $certificate.Extensions) {
+            if ($extension.Oid.Value -eq '2.5.29.19') {
+                $constraints = [Security.Cryptography.X509Certificates.X509BasicConstraintsExtension]::new($extension, $extension.Critical)
+                $isCertificateAuthority = $constraints.CertificateAuthority
+                break
+            }
+        }
+        if (-not $isCertificateAuthority) {
+            throw 'Certificate does not assert CA basic constraints.'
+        }
+    }
+    catch {
+        throw "Invalid Zscaler root CA at '$script:ConfigV2ZscalerRootCertificatePath': $($_.Exception.Message)"
+    }
+    finally {
+        if ($null -ne $certificate) {
+            $certificate.Dispose()
+        }
+    }
+
+    return [pscustomobject]@{
+        Pem = $pem.Trim()
+    }
 }
 
 # Returns PEM roots of the TLS chains Windows trusts for the probe hosts. Behind a TLS-inspecting
@@ -144,6 +203,8 @@ function New-ConfigV2TestInstance([string[]]$packages = @()) {
         throw 'wsl.exe not found. WSL 2 is required to run Linux-side config-v2 tests.'
     }
 
+    $zscalerRootCertificate = Get-ConfigV2ZscalerRootCertificate
+
     if (Test-ConfigV2TestInstance) {
         Write-Host "INFO: Removing leftover WSL instance $($script:ConfigV2TestInstanceName)."
         Remove-ConfigV2TestInstance
@@ -158,6 +219,7 @@ function New-ConfigV2TestInstance([string[]]$packages = @()) {
     }
 
     $prepare = New-Object System.Collections.Generic.List[string]
+    $prepare.Add("cat > /etc/ca-certificates/trust-source/anchors/config-v2-zscaler-root-ca.crt <<'PEM'`n$($zscalerRootCertificate.Pem)`nPEM")
     foreach ($entry in (Get-ConfigV2HostTrustedRoots).GetEnumerator()) {
         $prepare.Add("cat > /etc/ca-certificates/trust-source/anchors/config-v2-host-$($entry.Key.ToLowerInvariant()).crt <<'PEM'`n$($entry.Value)`nPEM")
     }

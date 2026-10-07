@@ -5,9 +5,10 @@ purpose: build-substrate
 altitude: feature
 paradigm: delegation pipeline
 scope: config-v2 bootstrap repository and its boundary with the dotfiles repo
-status: final
+status: superseded
+superseded_by: ../architecture-config-v2-dotfiles-integration-2026-08-07/ARCHITECTURE-SPINE.md
 created: 2026-08-05
-updated: 2026-08-07T08:28
+updated: 2026-10-07
 binds: [CAP-1, CAP-2, CAP-3, CAP-4]
 sources:
   - _bmad-output/specs/spec-dev-env-config-repo/SPEC.md
@@ -17,6 +18,8 @@ companions:
 ---
 
 # Architecture Spine — Reproducible Dev Environment Config
+
+> **Superseded (2026-10-07).** The two-repo model (AD-1) is revoked. Still-valid rules were carried into the [2026-08-07 in-repo dotfiles spine](../architecture-config-v2-dotfiles-integration-2026-08-07/ARCHITECTURE-SPINE.md) as AD-7 (distro dispatch), AD-8 (key schema) and AD-9 (execution order). Historical reference only.
 
 ## Design Paradigm
 

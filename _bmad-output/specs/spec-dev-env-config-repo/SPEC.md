@@ -12,7 +12,7 @@ sources:
 
 ## Why
 
-A developer working across multiple Linux machines (WSL/VM on Arch and Ubuntu) wastes significant time and effort re-configuring environments from scratch. The existing toolchain (chezmoi, zsh, fnm, Neovim, tmux, and a curated plugin set) is well-chosen but lacks a reproducible local bootstrap flow and a reliable sync mechanism. This spec realizes a two-repo setup — `config-v2` for bootstrap orchestration and a `dotfiles` repo managed by `chezmoi` — so that any fresh machine can reach a fully configured, usable dev state by installing Git manually, cloning this repo, and running `setup.sh` locally, while any existing machine can be kept in sync with the same local script.
+A developer working across multiple Linux machines (WSL/VM on Arch and Ubuntu) wastes significant time and effort re-configuring environments from scratch. The existing toolchain (chezmoi, zsh, fnm, Neovim, tmux, and a curated plugin set) is well-chosen but lacks a reproducible local bootstrap flow and a reliable sync mechanism. This spec realizes a single-repo setup — `config-v2` holds bootstrap orchestration, package manifests, and the `chezmoi` source tree under `dotfiles/` — so that any fresh machine can reach a fully configured, usable dev state by installing Git manually, cloning this repo, and running `setup.sh` locally, while any existing machine can be kept in sync with the same local script.
 
 ## Capabilities
 
@@ -21,7 +21,7 @@ A developer working across multiple Linux machines (WSL/VM on Arch and Ubuntu) w
   - **success:** On a fresh machine with no prior configuration, cloning the repository and executing `./setup.sh` from that checkout produces a fully configured, usable dev environment; the run exits cleanly.
 
 - **CAP-2**
-  - **intent:** User can apply and sync dotfiles across machines via `chezmoi`.
+  - **intent:** User can apply and sync dotfiles across machines via `chezmoi`, using the in-repo `dotfiles/` tree of the local `config-v2` checkout as the single source.
   - **success:** Running `chezmoi apply` on any registered machine reaches the same dotfile state as the source; idempotent across repeated runs.
 
 - **CAP-3**
@@ -40,7 +40,7 @@ A developer working across multiple Linux machines (WSL/VM on Arch and Ubuntu) w
 - **Fully silent/non-interactive once the local checkout is ready:** Linux bootstrap configuration lives at the top of `setup.sh`; no interactive prompts occur once the user has cloned the repo and started the script.
 - **Non-destructive for stateful assets:** existing SSH keys must be preserved on every re-run; setup must detect and skip rather than overwrite.
 - **Ownership model:** package managers own software installs; `chezmoi` owns dotfiles, templating, and conflict/state handling; `setup.sh` / `setup.ps1` orchestrate only. Host-only concerns (e.g. Nerd Fonts installation) live on a post-install checklist outside the repo.
-- **Two-repo split:** `config-v2` holds bootstrap/setup logic and package installation; the `dotfiles` repo holds all user config managed by `chezmoi`. The two repos are independent deployables.
+- **Single-repo, split ownership:** `config-v2` holds bootstrap logic, package manifests, and all `chezmoi`-managed user config under `dotfiles/`. Ownership stays split by concern (orchestrators sequence, package managers install, `chezmoi` applies). Tracked `dotfiles/` content must be safe to use as a repeatable bootstrap test fixture.
 - **Always overwrite managed config on apply:** repo-owned files are applied as-is; no soft merges for managed config.
 - **No global npm packages; no project-specific tools in global machine config.** See `stack.md` for the full tool catalog.
 
@@ -56,6 +56,7 @@ A developer working across multiple Linux machines (WSL/VM on Arch and Ubuntu) w
 
 A developer on a fresh Arch or Ubuntu machine (WSL or VM) manually installs Git, clones the repository, runs `./setup.sh`, waits for completion, and has a fully configured, usable dev environment — correct shell, plugins, editor, runtime, and dotfiles in place. The same developer re-runs setup on an existing machine a week later and the environment updates cleanly, SSH keys intact.
 
+Setup ends with a repo-local smoke verification that confirms the environment is usable, not just that the script exited 0.
 ## Assumptions
 
 - `zsh` is the target shell on all Linux machines; no alternative shell support is required.

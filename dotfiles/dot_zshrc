@@ -1,0 +1,40 @@
+# Managed by chezmoi from config-v2/dotfiles. Local edits are overwritten on apply.
+
+# --- History and editor ---
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=50000
+SAVEHIST=50000
+setopt share_history hist_ignore_dups
+export EDITOR=nvim
+export VISUAL=nvim
+
+# --- zinit bootstrap (zdharma-continuum) ---
+ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
+[ ! -d $ZINIT_HOME ] && mkdir -p "$(dirname $ZINIT_HOME)"
+[ ! -d $ZINIT_HOME/.git ] && git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
+source "${ZINIT_HOME}/zinit.zsh"
+
+# --- Completion and plugins: fzf-tab after compinit, before widget-wrapping plugins ---
+autoload -Uz compinit && compinit
+zinit light Aloxaf/fzf-tab
+zinit light zsh-users/zsh-autosuggestions
+zinit light zdharma-continuum/fast-syntax-highlighting
+
+# --- fnm (installed by setup.sh; shell integration lives here, not in installer-written rc lines) ---
+FNM_PATH="${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
+if [ -d "$FNM_PATH" ]; then
+  export PATH="$FNM_PATH:$PATH"
+fi
+if command -v fnm >/dev/null 2>&1; then
+  eval "$(fnm env --use-on-cd --shell zsh)"
+fi
+
+# --- zoxide ---
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init zsh)"
+fi
+
+# --- starship prompt (last, so it owns the prompt) ---
+if command -v starship >/dev/null 2>&1; then
+  eval "$(starship init zsh)"
+fi

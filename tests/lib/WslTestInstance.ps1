@@ -187,6 +187,9 @@ function Invoke-ConfigV2TestInstance([string]$bashScript, [hashtable]$environmen
 
     $previousEncoding = [Console]::OutputEncoding
     [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    # Callers run with 'Stop'; scripts that fail on purpose write to stderr, which Windows PowerShell
+    # would otherwise raise as a terminating NativeCommandError instead of capturing it as output.
+    $ErrorActionPreference = 'Continue'
     try {
         $output = & wsl.exe -d $script:ConfigV2TestInstanceName --user root --cd / --exec /bin/bash -c "echo $encoded | base64 -d | /bin/bash" 2>&1 |
             ForEach-Object { "$_" }

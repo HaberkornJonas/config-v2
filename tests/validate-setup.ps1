@@ -57,7 +57,13 @@ $forbiddenSetupPatterns = @(
     @{ Label = 'DOTFILES_REPO reference (AD-8)'; Pattern = 'DOTFILES_REPO' },
     @{ Label = 'remote dotfiles repository URL (AD-1)'; Pattern = '(?i)git@[^\s"'']+|https?://github\.com/[^\s"'']*dotfiles' },
     @{ Label = 'caller-cwd-relative manifest path (AD-3)'; Pattern = '\./packages/' },
-    @{ Label = 'chezmoi init with a repository argument (AD-1)'; Pattern = '(?m)^[^#\n]*chezmoi init\b(?![^\n]*--source)' }
+    @{ Label = 'chezmoi init with a repository argument (AD-1)'; Pattern = '(?m)^[^#\n]*chezmoi init\b(?![^\n]*--source)' },
+    @{ Label = 'Ubuntu reference (AD-7)'; Pattern = '(?i)ubuntu' },
+    @{ Label = 'apt package logic (AD-7)'; Pattern = '\bapt(-get|-key)?\b' },
+    @{ Label = 'dpkg reference (AD-7)'; Pattern = '\bdpkg\b' },
+    @{ Label = 'lsb_release reference (AD-7)'; Pattern = '\blsb_release\b' },
+    @{ Label = 'third-party apt repository (AD-7)'; Pattern = 'download\.docker\.com|packages\.microsoft\.com' },
+    @{ Label = 'ID_LIKE match that would accept Arch derivatives (AD-7)'; Pattern = '\bID_LIKE\b' }
 )
 foreach ($check in $forbiddenSetupPatterns) {
     if ($setupContent -match $check.Pattern) {
@@ -70,7 +76,7 @@ $requiredSetupPatterns = @(
     @{ Label = 'repository root derived from the script location'; Pattern = 'REPO_ROOT="\$\(cd "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)" && pwd\)"' },
     @{ Label = 'local chezmoi init --apply --source <repo>/dotfiles'; Pattern = '(?m)^[^#\n]*chezmoi init --apply\b[^\n]*--source "\$\(require_repo_asset_path "dotfiles"\)"' },
     @{ Label = 'Arch manifest install via sudo from repo root'; Pattern = 'sudo pacman -S --needed --noconfirm - < "\$\(require_repo_asset_path "packages/arch\.txt"\)"' },
-    @{ Label = 'Ubuntu manifest install via sudo from repo root'; Pattern = 'sudo xargs -a "\$\(require_repo_asset_path "packages/ubuntu\.txt"\)" apt-get install -y' }
+    @{ Label = 'Arch-only guard message (AD-7)'; Pattern = 'only Arch Linux is supported' }
 )
 foreach ($check in $requiredSetupPatterns) {
     if ($setupContent -notmatch $check.Pattern) {
@@ -78,20 +84,24 @@ foreach ($check in $requiredSetupPatterns) {
     }
 }
 
-# The Ubuntu branch cannot run in the Arch test instance: every system command in it must use sudo.
-$ubuntuBranch = [regex]::Match($setupContent, '(?s)elif \[\[ "\$DISTRO" == "ubuntu" \]\]; then(.*?)\n\s*else\b').Groups[1].Value
-if ([string]::IsNullOrEmpty($ubuntuBranch)) {
-    $failures.Add('setup.sh Ubuntu branch not found.')
+# The Arch-only guard belongs to preflight: before the checkout checks and before any package step.
+$guardIndex = $setupContent.IndexOf('only Arch Linux is supported')
+foreach ($marker in @('require_repo_asset_path ".git"', 'sudo pacman')) {
+    $markerIndex = $setupContent.IndexOf($marker)
+    if ($guardIndex -ge 0 -and $markerIndex -ge 0 -and $guardIndex -gt $markerIndex) {
+        $failures.Add("setup.sh Arch-only guard must run in preflight before any package step (found after '$marker').")
+    }
 }
-else {
-    foreach ($line in ($ubuntuBranch -split "`r?`n")) {
-        if ($line -match '^\s*#' -or $line -match '^\s*echo\s+"INFO:') { continue }
-        foreach ($command in @('apt-get', 'install -m', 'gpg --dearmor', 'chmod', 'tee')) {
-            $index = $line.IndexOf($command)
-            if ($index -ge 0 -and $line.Substring(0, $index) -notmatch '\bsudo\s+(xargs\s.*)?$') {
-                $failures.Add("setup.sh Ubuntu branch runs '$command' without sudo: $($line.Trim())")
-            }
-        }
+
+# --- Arch-only repository scope (AD-7, correct-course 2026-10-29) ---
+foreach ($removedPath in @('setup.ps1', 'packages/scoop.txt', 'packages/winget.txt', 'packages/ubuntu.txt', 'tests/validate-setup-ps1.ps1')) {
+    if (Test-Path -LiteralPath (Join-Path $repoRoot $removedPath)) {
+        $failures.Add("$removedPath must not exist (Arch-only scope, AD-7).")
+    }
+}
+foreach ($keptPath in @('packages/arch.txt', 'tests/lib/WslTestInstance.ps1')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $keptPath) -PathType Leaf)) {
+        $failures.Add("$keptPath is missing.")
     }
 }
 
@@ -161,6 +171,40 @@ function Assert-FailedBeforeMutation([string]$scenario, $result, [string]$expect
     }
     if (Test-Instance "test -e $testHome/.config/chezmoi") {
         $failures.Add("[$scenario] setup.sh created ~/.config/chezmoi before failing.")
+    }
+    if (Test-Instance "test -e $testHome/.ssh") {
+        $failures.Add("[$scenario] setup.sh created ~/.ssh before failing.")
+    }
+}
+
+# Swaps /etc/os-release (a relative symlink to ../usr/lib/os-release on Arch) for a fake; an empty
+# $content only moves it away. Restore-OsRelease undoes either.
+function Set-FakeOsRelease([string]$content) {
+    $bash = 'mv /etc/os-release /etc/os-release.config-v2-orig'
+    if (-not [string]::IsNullOrEmpty($content)) {
+        $bash += ' && printf ''%s'' "$FAKE_OS_RELEASE" > /etc/os-release && chmod 0644 /etc/os-release'
+    }
+    $result = Invoke-Instance $bash @{ FAKE_OS_RELEASE = $content }
+    if ($result.ExitCode -ne 0) { throw "Faking /etc/os-release failed: $($result.Output)" }
+}
+
+function Restore-OsRelease {
+    $result = Invoke-Instance 'if [ -e /etc/os-release.config-v2-orig ] || [ -L /etc/os-release.config-v2-orig ]; then rm -f /etc/os-release && mv /etc/os-release.config-v2-orig /etc/os-release; fi'
+    if ($result.ExitCode -ne 0) { throw "Restoring /etc/os-release failed: $($result.Output)" }
+}
+
+function Assert-NonArchRefused([string]$scenario, [string]$osRelease, [string]$expectedId) {
+    Reset-Fixture
+    Set-FakeOsRelease $osRelease
+    try {
+        $result = Invoke-Setup
+        Assert-FailedBeforeMutation $scenario $result 'only Arch Linux is supported'
+        if ($result.Output -notmatch [regex]::Escape("Unsupported distro '$expectedId'")) {
+            $failures.Add("[$scenario] setup.sh did not report the detected distro '$expectedId'. Output: $($result.Output)")
+        }
+    }
+    finally {
+        Restore-OsRelease
     }
 }
 
@@ -307,6 +351,14 @@ if ($setupContent) {
             # Scenario G: sudo unavailable fails clearly before mutation.
             Reset-Fixture
             Assert-FailedBeforeMutation 'G no sudo' (Invoke-Setup -path $basePath) 'sudo is required'
+
+            # Scenarios H-J fake /etc/os-release, so they run last and always restore it (AD-7, NFR2).
+            Assert-NonArchRefused 'H Ubuntu refused' "NAME=`"Ubuntu`"`nID=ubuntu`nID_LIKE=debian`n" 'ubuntu'
+            Assert-NonArchRefused 'I Arch derivative refused' "NAME=`"EndeavourOS`"`nID=`"endeavouros`"`nID_LIKE=arch`n" 'endeavouros'
+            Assert-NonArchRefused 'J os-release missing' '' 'unknown'
+            if (-not (Test-Instance 'grep -qx "ID=arch" /etc/os-release')) {
+                $failures.Add('[J os-release missing] /etc/os-release was not restored to ID=arch.')
+            }
         }
     }
     catch {

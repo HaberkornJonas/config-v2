@@ -43,19 +43,7 @@ if ($failures.Count -eq 0) {
         },
         @{
             Label = 'Local checkout requirement explanation'
-            Pattern = '(?is)(setup\.sh.*?reads.*?packages/arch\.txt.*?packages/ubuntu\.txt.*?same checkout.*?supported bootstrap path)'
-        },
-        @{
-            Label = 'Windows companion section'
-            Pattern = '(?im)^##\s+Windows Companion Bootstrap\s*$'
-        },
-        @{
-            Label = 'Implemented Windows companion entry point'
-            Pattern = '(?is)Windows companion entry point is `setup\.ps1` in a local checkout of this repo'
-        },
-        @{
-            Label = 'Exact Windows companion command'
-            Pattern = [regex]::Escape('powershell -ExecutionPolicy Bypass -File .\setup.ps1')
+            Pattern = '(?is)(setup\.sh.*?reads.*?packages/arch\.txt.*?same checkout.*?supported bootstrap path)'
         },
         @{
             Label = 'Two-repo architecture explanation'
@@ -71,6 +59,19 @@ if ($failures.Count -eq 0) {
 
     if ($readmeContent -match '(?im)\bconfig\.sh\b') {
         $failures.Add('README still references config.sh after the inline configuration change.')
+    }
+
+    # Arch-only scope (correct-course 2026-10-29). Windows and other distros may still be named as deferred.
+    $forbiddenReadmeChecks = @(
+        @{ Label = 'Windows Companion Bootstrap section'; Pattern = '(?im)^##\s+Windows Companion Bootstrap\s*$' },
+        @{ Label = 'removed Ubuntu manifest reference'; Pattern = 'packages/ubuntu\.txt' },
+        @{ Label = 'removed Scoop/winget manifest reference'; Pattern = 'packages/(scoop|winget)\.txt' },
+        @{ Label = 'removed setup.ps1 command'; Pattern = [regex]::Escape('.\setup.ps1') }
+    )
+    foreach ($check in $forbiddenReadmeChecks) {
+        if ($readmeContent -match $check.Pattern) {
+            $failures.Add("README still contains a $($check.Label).")
+        }
     }
 
     $requiredSetupAssignments = @(
@@ -119,8 +120,8 @@ if ($failures.Count -eq 0) {
             Pattern = '(?m)pacman -S --needed --noconfirm - < "\$\(require_repo_asset_path "packages/arch\.txt"\)"'
         },
         @{
-            Label = 'Ubuntu package manifest local checkout usage'
-            Pattern = '(?m)xargs -a "\$\(require_repo_asset_path "packages/ubuntu\.txt"\)" apt-get install -y'
+            Label = 'Arch-only guard'
+            Pattern = 'only Arch Linux is supported'
         }
     )
 

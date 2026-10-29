@@ -14,12 +14,11 @@ Full tool catalog for the reproducible dev-environment setup. Every item here is
 |---|---|
 | Dotfile manager | `chezmoi` — owns all user config, templating, and conflict/state handling |
 
-## Linux package management
+## Package management
 
 | Distro | Manifest |
 |---|---|
 | Arch | `packages/arch.txt` |
-| Ubuntu | `packages/ubuntu.txt` |
 
 ## Dev runtime
 
@@ -43,15 +42,8 @@ Full tool catalog for the reproducible dev-environment setup. Every item here is
 | Directory jumping | `zoxide` |
 | Prompt | `starship` |
 
-## Windows companion
-
-| Layer | Tool |
-|---|---|
-| Entrypoint | `setup.ps1` |
-| Package managers | Scoop, winget |
-
 ## Scripting convention
 
 - Linux bootstrap configuration is declared inline at the top of `setup.sh`; the script reads those assignments rather than prompting interactively.
-- Each platform entry point keeps its bootstrap configuration alongside the script that uses it.
-- `setup.sh` / `setup.ps1` orchestrate only; they do not own software installs or dotfile state.
+- Bootstrap configuration lives alongside `setup.sh`.
+- `setup.sh` orchestrates only; it does not own software installs or dotfile state.

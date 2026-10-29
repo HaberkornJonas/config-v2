@@ -19,19 +19,19 @@ This document provides the complete epic and story breakdown for config-v2, deco
 
 ### Functional Requirements
 
-FR1: A developer can bootstrap a fresh Linux development environment from a local checkout of `config-v2` by running `./setup.sh`, with packages installed and integrated dotfiles applied from the same repository.
+FR1: A developer can bootstrap a fresh Arch Linux (WSL or VM) development environment from a local checkout of `config-v2` by running `./setup.sh`, with packages installed and integrated dotfiles applied from the same repository.
 
 FR2: A developer can apply and sync tracked dotfiles across machines via `chezmoi` using the in-repo `dotfiles/` source tree as the authoritative managed configuration source.
 
 FR3: A developer can rerun setup on an existing environment without destroying stateful assets such as SSH keys or other explicitly protected local state.
 
-FR4: A developer can bootstrap the Windows companion environment via `setup.ps1` while keeping its repository layout and configuration model consistent with the shared in-repo dotfiles architecture.
+FR4: (Removed by correct-course 2026-10-29 — Windows companion bootstrap deferred.)
 
 ### NonFunctional Requirements
 
 NFR1: The repository remains public-safe: no secrets, private keys, passwords, or machine-unique credentials are committed.
 
-NFR2: Linux-first support targets Arch and Ubuntu, with distro-specific package manifests and guarded distro-specific commands.
+NFR2: Arch Linux (WSL or VM) is the only supported target; packages come from `packages/arch.txt`, and `setup.sh` refuses other distros before any mutation.
 
 NFR3: Once the local checkout is ready, the bootstrap flow is silent and non-interactive.
 
@@ -60,28 +60,29 @@ No UX design contract exists for this planning run.
 
 | FR | Epic | Brief description |
 | --- | --- | --- |
-| FR1 | Epic 2 | local-checkout Linux bootstrap with integrated in-repo dotfiles |
+| FR1 | Epic 2 | local-checkout Arch Linux bootstrap with integrated in-repo dotfiles |
 | FR2 | Epic 2 | dotfiles sync through the in-repo `dotfiles/` source tree |
 | FR3 | Epic 2 | idempotent rerun with protected stateful assets |
-| FR4 | Epic 3 | Windows companion bootstrap aligned to the shared repository model |
+| FR4 | — | removed (deferred) by correct-course 2026-10-29 |
 
 ## Epic List
 
 ### Epic 1: Linux Bootstrap (delivered, closed 2026-10-07)
-Delivered `packages/arch.txt`, `packages/ubuntu.txt`, `setup.sh` (distro dispatch, package install, SSH/GPG detect-before-mutate guards, remote chezmoi init) and the README. Closed by correct-course 2026-10-07 as the base the in-repo dotfiles work extends; story files `1-1` to `1-5` are kept as history. Superseded parts: remote `DOTFILES_REPO` apply and two-repo README wording, both reworked in Epic 2.
+Delivered `packages/arch.txt`, `packages/ubuntu.txt`, `setup.sh` (distro dispatch, package install, SSH/GPG detect-before-mutate guards, remote chezmoi init) and the README. Closed by correct-course 2026-10-07 as the base the in-repo dotfiles work extends; story files `1-1` to `1-5` are kept as history. Superseded parts: remote `DOTFILES_REPO` apply and two-repo README wording, both reworked in Epic 2. `packages/ubuntu.txt` and the Ubuntu branch are removed by Story 2.6 (Arch-only scope, correct-course 2026-10-29).
 **Status:** done (see `sprint-change-proposal-2026-10-07.md`)
 
-### Epic 2: Integrated Linux Bootstrap and Dotfiles Sync
-The developer can clone `config-v2`, run `./setup.sh`, and reach a reproducible Linux environment where packages, managed dotfiles, rerun safety, and smoke verification all work from the same repository.
+### Epic 2: Integrated Arch Linux Bootstrap and Dotfiles Sync
+The developer can clone `config-v2`, run `./setup.sh`, and reach a reproducible Arch Linux environment where packages, managed dotfiles, rerun safety, and smoke verification all work from the same repository.
 **FRs covered:** FR1, FR2, FR3
 
-### Epic 3: Windows Companion Alignment
-The developer can bootstrap the Windows companion environment with a repository layout and configuration model that stays consistent with the shared in-repo dotfiles architecture.
-**FRs covered:** FR4
+### Epic 3: Windows Companion Alignment (removed 2026-10-29)
+Dropped by correct-course 2026-10-29 (Arch Linux only); Story 3.1 cancelled, Story 3.2 dropped. See `sprint-change-proposal-2026-10-29.md`.
 
-## Epic 2: Integrated Linux Bootstrap and Dotfiles Sync
+## Epic 2: Integrated Arch Linux Bootstrap and Dotfiles Sync
 
-The developer can clone `config-v2`, run `./setup.sh`, and reach a reproducible Linux environment where packages, managed dotfiles, rerun safety, and smoke verification all work from the same repository.
+The developer can clone `config-v2`, run `./setup.sh`, and reach a reproducible Arch Linux environment where packages, managed dotfiles, rerun safety, and smoke verification all work from the same repository.
+
+**Sequencing:** Story 2.6 is implemented next, before Story 2.3 (correct-course 2026-10-29).
 
 ### Story 2.1: Create an In-Repo Dotfiles Source Tree
 
@@ -148,7 +149,7 @@ So that successful bootstrap means the machine is actually usable, not just that
 
 **Acceptance Criteria:**
 
-**Given** the supported Linux setup flow,
+**Given** the supported Arch Linux setup flow,
 **When** package installation and local dotfile apply complete,
 **Then** a repo-local verification stage runs automatically or via a documented repo-local command
 **And** it checks the expected package toolchain, key managed files or symlinks, and primary shell or editor entrypoints (AD-6, NFR7)
@@ -158,7 +159,7 @@ So that successful bootstrap means the machine is actually usable, not just that
 **Then** the result is surfaced as an actionable failure signal
 **And** the user can tell which part of the integrated setup flow is broken (FR1, FR3)
 
-### Story 2.5: Refresh Linux-Facing Documentation and README Validation
+### Story 2.5: Refresh Arch Linux Documentation and README Validation
 
 As a developer using or maintaining this repository,
 I want the documentation and its validation test to describe the in-repo dotfiles model,
@@ -170,6 +171,7 @@ So that the supported workflow is clear and the README stays truthful as the set
 **When** I read the bootstrap flow description,
 **Then** it describes `dotfiles/` as part of `config-v2` rather than a separate dotfiles repository
 **And** it explains the local-checkout execution contract and verification expectations (FR1, AD-1, AD-3, AD-6)
+**And** it states Arch Linux (WSL or VM) as the only supported target and lists Windows and other distros as deferred (FR1, NFR2)
 
 **Given** the updated docs,
 **When** I review examples and configuration guidance,
@@ -181,42 +183,32 @@ So that the supported workflow is clear and the README stays truthful as the set
 **Then** the two-repo and `DOTFILES_REPO` assertions are replaced by in-repo dotfiles, local-checkout, and verification assertions
 **And** the test passes against the new README
 
-## Epic 3: Windows Companion Alignment
+### Story 2.6: Narrow the Bootstrap to Arch Linux Only
 
-The developer can bootstrap the Windows companion environment with a repository layout and configuration model that stays consistent with the shared in-repo dotfiles architecture.
+> Added by correct-course 2026-10-29. Implement next, before Story 2.3.
 
-### Story 3.1: Align setup.ps1 with the Shared Repository Contract
-
-As a developer using the Windows companion bootstrap,
-I want `setup.ps1` to follow the same repository-root contract as Linux,
-So that both entry points share one coherent repository model.
+As the maintainer of config-v2,
+I want the repository to contain only the Arch Linux bootstrap path,
+So that every tracked script and validator matches the supported scope and nothing untested ships.
 
 **Acceptance Criteria:**
 
-**Given** the Windows companion bootstrap entry point,
-**When** I inspect its expected inputs and path assumptions,
-**Then** it is defined relative to the shared `config-v2` checkout
-**And** it does not assume a separate remote dotfiles repository as the supported model (FR4, AD-1, AD-3)
+**Given** the repository,
+**When** I list tracked files,
+**Then** `setup.ps1`, `packages/scoop.txt`, `packages/winget.txt`, `packages/ubuntu.txt`, and `tests/validate-setup-ps1.ps1` no longer exist
+**And** `tests/lib/WslTestInstance.ps1` (the Windows-hosted WSL Arch test harness) is kept
 
-**Given** the Windows bootstrap design,
-**When** I review ownership boundaries,
-**Then** package installation remains delegated to Scoop and winget
-**And** any managed-config integration stays consistent with the orchestrator-delegates rule (NFR4, AD-2)
+**Given** `setup.sh`,
+**When** I run it on a host whose `/etc/os-release` `ID` is not `arch`,
+**Then** it exits non-zero during preflight with an actionable "only Arch Linux is supported" error
+**And** no package, file, or key mutation happens before that exit (AD-7, AD-9, NFR2)
+**And** `setup.sh` contains no apt, dpkg, or Ubuntu repository logic
 
-### Story 3.2: Document the Windows Companion Path Under the New Model
+**Given** `tests/validate-setup.ps1` and `tests/validate-readme.ps1`,
+**When** the Ubuntu and Windows assertions are removed,
+**Then** they assert the Arch-only guard and the absence of Ubuntu/Windows paths instead
+**And** `README.md` no longer has a Windows Companion Bootstrap section or a `packages/ubuntu.txt` reference (the full in-repo dotfiles README rewrite stays in Story 2.5)
 
-As a developer setting up or revisiting the Windows companion environment,
-I want the repository to explain how Windows fits into the shared in-repo architecture,
-So that I understand what is supported now and what remains deferred.
-
-**Acceptance Criteria:**
-
-**Given** the Windows-facing repository guidance,
-**When** I read it,
-**Then** it explains how `setup.ps1` relates to the shared repository layout and integrated dotfiles direction
-**And** it clearly distinguishes current support from deferred Windows-deep-integration work (FR4)
-
-**Given** the planning artifacts,
-**When** I review Epic 3 scope,
-**Then** Windows companion work remains aligned to the new architecture without reintroducing the old two-repo assumption
-**And** the implementation boundary is explicit enough for a dev agent to execute (AD-2, AD-3)
+**Given** the Windows PowerShell validation commands,
+**When** I run `validate-setup.ps1`, `validate-dotfiles.ps1`, `validate-readme.ps1`, and `validate-wsl-test-ca.ps1`,
+**Then** all pass

@@ -7,8 +7,8 @@ paradigm: monorepo delegation pipeline
 scope: config-v2 with dotfiles integrated as a standard in-repo directory for shared BMAD scope and local bootstrap testing
 status: final
 created: '2026-08-07'
-updated: '2026-10-07'
-binds: [CAP-1, CAP-2, CAP-3, CAP-4]
+updated: '2026-10-29'
+binds: [CAP-1, CAP-2, CAP-3]
 sources:
   - README.md
   - setup.sh
@@ -27,8 +27,8 @@ companions:
 ```mermaid
 graph LR
     ENTRY["Local checkout\nconfig-v2/"]
-    SETUP["setup.sh / setup.ps1"]
-    PKG["Package managers\npacman / apt / scoop / winget"]
+    SETUP["setup.sh"]
+    PKG["Package manager\npacman"]
     CM["chezmoi"]
     DF["dotfiles/\nlocal source tree"]
     VERIFY["repo-local verification"]
@@ -50,7 +50,7 @@ graph LR
 
 ### AD-2 — Orchestrator delegates, never owns
 
-- **Binds:** `setup.sh`, future `setup.ps1`, CAP-1, CAP-2, CAP-4
+- **Binds:** `setup.sh`, CAP-1, CAP-2
 - **Prevents:** bootstrap scripts accumulating package definitions, dotfile content, or merge logic that belongs to delegates
 - **Rule:** Setup entry points sequence package installation, stateful-asset preparation, local chezmoi apply, and verification only. Package manifests stay in `packages/`; managed user configuration stays in `dotfiles/`; file-state reconciliation for managed content stays in chezmoi.
 
@@ -78,19 +78,19 @@ graph LR
 - **Prevents:** a green-looking bootstrap run that exits successfully but leaves the machine unusable
 - **Rule:** The supported setup flow ends with a repo-local smoke-verification stage that checks the expected package toolchain, key managed files/symlinks, and primary shell/editor entrypoints after chezmoi apply. Verification belongs to the repository and runs against the integrated `dotfiles/` tree.
 
-### AD-7 — Distro dispatch is isolated
+### AD-7 — Arch-only distro guard
 
-> Carried forward from the superseded 2026-08-05 spine (AD-5) by correct-course 2026-10-07.
+> Carried forward from the superseded 2026-08-05 spine (AD-5) by correct-course 2026-10-07; narrowed from multi-distro dispatch to an Arch-only guard by correct-course 2026-10-29.
 
 - **Binds:** CAP-1, `packages/`, `setup.sh`
-- **Prevents:** Arch-specific commands running on Ubuntu (or vice versa); distro-detection logic scattered across the script
-- **Rule:** `setup.sh` detects the distro once via `/etc/os-release` and uses the result to select the matching package manifest and package-manager invocation. Distro-specific commands live only inside guarded branches keyed to that result; shared logic stays distro-agnostic.
+- **Prevents:** pacman running on a non-Arch host; an unsupported host being partially mutated
+- **Rule:** `setup.sh` reads `/etc/os-release` once during preflight. `ID=arch` is the only supported value; any other value exits with an actionable error before any mutation. Packages come solely from `packages/arch.txt` via pacman. Adding a distro later requires a new architecture decision.
 
 ### AD-8 — Bootstrap configuration is the canonical key schema
 
 > Carried forward from the superseded 2026-08-05 spine (AD-3, AD-8) by correct-course 2026-10-07.
 
-- **Binds:** `setup.sh`, `setup.ps1`, `dotfiles/` templates, CAP-1, CAP-3, CAP-4
+- **Binds:** `setup.sh`, `dotfiles/` templates, CAP-1, CAP-3
 - **Prevents:** the same conceptual value being read under different names across scripts and templates; silent empty values when a key is missing
 - **Rule:** Every value a bootstrap script reads is declared in the configuration block at the top of its entry point. Canonical Linux keys: `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GPG_FINGERPRINT`, `SSH_KEY_FILE`. `DOTFILES_REPO` is removed: the dotfiles source path is derived from the repository root (AD-3), not configured. New keys are declared before use in any script or template. All values must be public-safe (AD-4).
 
@@ -142,11 +142,9 @@ No delegate may call back into setup scripts. `dotfiles/` content may assume pac
 
 ```text
 config-v2/
-  setup.sh                # Linux bootstrap orchestrator
-  setup.ps1               # Windows companion bootstrap (deferred for deep dotfiles integration)
+  setup.sh                # Arch Linux bootstrap orchestrator
   packages/
     arch.txt              # Arch package manifest
-    ubuntu.txt            # Ubuntu package manifest
   dotfiles/               # chezmoi source tree applied from the local checkout
   tests/                  # smoke verification for the supported setup flow
   README.md               # local-checkout bootstrap contract
@@ -159,7 +157,7 @@ sequenceDiagram
     participant dev as Developer
     participant repo as local config-v2 checkout
     participant setup as setup.sh
-    participant pkg as pacman / apt
+    participant pkg as pacman
     participant cm as chezmoi
     participant df as dotfiles/
     participant verify as smoke verification
@@ -181,12 +179,11 @@ sequenceDiagram
 | CAP-1 — fresh Linux bootstrap | `setup.sh`, `packages/`, `dotfiles/`, verification | AD-1, AD-2, AD-3, AD-4, AD-6, AD-7, AD-8, AD-9 |
 | CAP-2 — sync dotfiles across machines | `dotfiles/` via chezmoi apply | AD-1, AD-2, AD-5 |
 | CAP-3 — idempotent rerun | stateful-asset guards + managed apply + verification | AD-4, AD-5, AD-6, AD-8, AD-9 |
-| CAP-4 — Windows companion bootstrap | `setup.ps1` and shared repo layout | AD-2, AD-3, AD-8 |
 
 ## Deferred
 
 - **Exact `dotfiles/` internal layout** — flat chezmoi source root vs. nested subfolders can be decided during implementation
 - **Migration choreography** — not needed: the former external `HaberkornJonas/dotfiles` repository is empty, so `dotfiles/` starts fresh (correct-course 2026-10-07)
-- **Windows deep integration with integrated dotfiles** — keep the shared repo layout, but defer platform-specific mechanics
+- **Windows companion bootstrap and non-Arch distros** — dropped from scope by correct-course 2026-10-29; future evaluation only. The removed `setup.ps1` and Ubuntu branch remain in git history (commit `45598f9`)
 - **Concrete verification assertions** — exact commands and file checks belong in test design, not the spine
 - **Spec and README refresh** — SPEC refreshed by correct-course 2026-10-07; README refresh is Epic 2 Story 2.5

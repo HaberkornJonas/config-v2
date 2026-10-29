@@ -4,7 +4,9 @@ baseline_commit: 01fbd7aa9ca70298c62ade2402701adf75fcfd5d
 
 # Story 3.1: Align setup.ps1 with the Shared Repository Contract
 
-Status: in-progress
+Status: cancelled
+
+> **Cancelled by correct-course 2026-10-29 (Arch Linux only).** Windows support is dropped and deferred; the `setup.ps1`, Scoop/winget manifests, and `tests/validate-setup-ps1.ps1` delivered here are removed by Story 2.6. The `tests/lib/WslTestInstance.ps1` stderr fix from this story is kept as shared test infrastructure. See `_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-29.md`.
 
 > **Sequencing (correct-course 2026-10-07):** implement after Epic 2 Stories 2.1–2.2 land, because this story needs `dotfiles/` and the repo-root contract to exist. This story was originally created as Story 2.1; the epics were renumbered when the delivered Linux bootstrap was closed as Epic 1. Also honor the new spine rule AD-8 (bootstrap configuration is the canonical key schema; no `DOTFILES_REPO`).
 
@@ -48,6 +50,20 @@ so that both entry points share one coherent repository model.
   - [x] Confirm the implementation does not invent unsupported WSL2/Linux-user bootstrap automation.
   - [x] Confirm the implementation does not restore the old two-repo assumption anywhere in code, docs, or tests.
   - [x] Confirm all behavior added in this story is explicit enough for Story 3.2 documentation work to describe accurately.
+
+### Review Findings
+
+- [ ] [Review][Decision] Elevation policy for setup.ps1 — The official Scoop installer refuses to run elevated by default, while `Docker.DockerDesktop` and `Microsoft.DotNet.SDK.8` install machine-wide and trigger UAC prompts when the session is not elevated. The script neither checks nor documents the expected session type, so neither mode is fully unattended.
+- [ ] [Review][Patch] `$LASTEXITCODE = 0` shadows the global exit code, so Scoop and winget failures never throw when the script is run in-session (`.\setup.ps1`; reproduced: script-scope 0, global 7) [setup.ps1:56]
+- [ ] [Review][Patch] Reruns of the winget loop fail on benign "already installed / no applicable upgrade" exit codes (-1978335189, -1978335135), breaking rerun safety [setup.ps1:64]
+- [ ] [Review][Patch] AD-8: Scoop installer URL and shims path are inline instead of in the configuration block, and the shims path ignores `$env:SCOOP` [setup.ps1:43]
+- [ ] [Review][Patch] Orphaned `DOTFILES_REPO` entry in `$setupValuesToBlock` after its removal from `setup.sh` [tests/validate-readme.ps1:90]
+- [ ] [Review][Patch] Story record inconsistencies: Completion Notes say both "remains in-progress" and "moved to review"; File List omits `.gitattributes` (`packages/**` eol rule) [3-1-align-setup-ps1-with-shared-repository-contract.md:197]
+- [x] [Review][Defer] Windows validator is regex-only; it neither runs setup.ps1 behavior (exit-code paths) nor checks that manifests are loaded before installs [tests/validate-setup-ps1.ps1] — deferred, pre-existing
+- [x] [Review][Defer] Manifest parsers do not strip inline `#` comments (setup.ps1), and Linux manifests are not comment-filtered at all [setup.ps1:23] — deferred, pre-existing
+- [x] [Review][Defer] Story 2.2 setup.sh edge cases: no `sudo -v` rights check in preflight, `gpg --dearmor` without `--batch --yes` breaks Ubuntu reruns, legacy chezmoi.yaml/json configs not detected [setup.sh:28] — deferred, pre-existing
+- [x] [Review][Defer] Story 2.2 test gaps: AC5 never seeds a stale chezmoi.toml, scenario G assumes no sudo in the image, the "chezmoi missing" path is untested, root scenario does not assert /root is unchanged, Ubuntu sudo check is substring-heuristic, one fixture failure aborts all later scenarios [tests/validate-setup.ps1] — deferred, pre-existing
+- [x] [Review][Defer] Story 2.2 set to `done` in sprint-status without a recorded code review; its "suite passed" claim conflicts with 3.1's Debug Log (scenario C abort) [sprint-status.yaml:63] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -186,7 +202,8 @@ GPT-5.4 (Copilot CLI runtime)
 - Create-story workflow activation completed with manual workflow resolution because the resolver requires Python 3.11+ in this environment.
 - `tests/validate-setup-ps1.ps1`, `tests/validate-readme.ps1`, and `setup.ps1` PowerShell parsing passed, including running the setup validator from outside the repository root.
 - Full Linux integration validation remains blocked: `tests/validate-dotfiles.ps1` and `tests/validate-setup.ps1` cannot prepare the WSL Arch test instance because the package mirror TLS certificate chain is untrusted (`core.db`, OpenSSL verify result 20). The dotfiles check was retried sequentially and hit the same environment error.
-
+- 2026-10-29: After the Zscaler CA fix (`1700e16`), `tests/validate-setup.ps1` reached scenario C and aborted with `Unexpected test error: ERROR: Do not run setup.sh as root`. Cause: `Invoke-ConfigV2TestInstance` inherited `$ErrorActionPreference = 'Stop'`, so Windows PowerShell raised the expected stderr output of `wsl.exe ... 2>&1` as a terminating error. Fixed by scoping `'Continue'` to that call in `tests/lib/WslTestInstance.ps1`.
+- 2026-10-29: Full validation green under Windows PowerShell 5.1: `validate-setup.ps1`, `validate-dotfiles.ps1`, `validate-setup-ps1.ps1`, `validate-readme.ps1`, `validate-wsl-test-ca.ps1`.
 ### Completion Notes List
 
 - Ultimate context engine analysis completed - comprehensive developer guide created.
@@ -194,6 +211,7 @@ GPT-5.4 (Copilot CLI runtime)
 - Story scope intentionally guards against copying the stale two-repo / `config.sh` assumptions still present in older artifacts.
 - Added a repo-root-safe Windows package orchestrator, data-only Scoop/winget manifests, and targeted contract validation; updated the README to describe the implemented entry point.
 - All story-specific checks pass. The story remains in-progress until the existing WSL-backed Linux integration suite can run successfully.
+- 2026-10-29: WSL-backed integration suite unblocked (Zscaler CA trust + native-stderr handling fix in the test helper) and passing; story moved to review.
 
 ### File List
 
@@ -203,8 +221,10 @@ GPT-5.4 (Copilot CLI runtime)
 - `tests/validate-setup-ps1.ps1` (new)
 - `README.md`
 - `tests/validate-readme.ps1`
+- `tests/lib/WslTestInstance.ps1`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
 ### Change Log
 
 - 2026-10-07: Added the Windows Scoop/winget bootstrap and contract validation, and updated the README Windows entry-point wording.
+- 2026-10-29: Fixed WSL test helper so expected setup.sh stderr is captured instead of aborting the suite; full validation green; status → review.

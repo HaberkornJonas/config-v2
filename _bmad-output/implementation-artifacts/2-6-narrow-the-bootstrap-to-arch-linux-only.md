@@ -4,8 +4,7 @@ baseline_commit: caeec503728d21671a8c8a6f4e8ddd96e439fb27
 
 # Story 2.6: Narrow the Bootstrap to Arch Linux Only
 
-Status: review
-
+Status: done
 > **Added by correct-course 2026-10-29 (Arch Linux only).** Implement next, before Story 2.3. Planning artifacts (SPEC, stack.md, architecture spine AD-7, epics, Story 3.1 file, deferred-work, sprint-status) were already updated by the correct-course commit `caeec50`. This story is the **code** half: delete Windows/Ubuntu files, add the Arch-only guard to `setup.sh`, retarget the validators, and make minimal README edits.
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
@@ -43,6 +42,16 @@ so that every tracked script and validator matches the supported scope and nothi
   - [x] Mutation checks on a temp copy (each must go red, then revert): (a) re-add an `ubuntu)` branch → static; (b) move the guard after `sudo pacman` → static order check + scenario H shim log; (c) accept `ID_LIKE=arch` → scenario I; (d) drop the `-r /etc/os-release` check → scenario J (bash error, no actionable message); (e) re-create `packages/ubuntu.txt` → static absence check; (f) re-add a `## Windows Companion Bootstrap` heading to README → readme validator.
 - [x] Task 6: Scope guard
   - [x] `git status` shows only the files in the File Structure table. No planning artifact edits are needed beyond this story file and `sprint-status.yaml` status changes.
+
+### Review Findings
+
+- [x] [Review][Patch] Make the `/etc/os-release` fake/restore crash-safe: call `Set-FakeOsRelease` inside the `try` so a partial swap is always restored, and refuse to swap when `/etc/os-release.config-v2-orig` already exists (a leftover from an interrupted run would otherwise be overwritten by the fake) [tests/validate-setup.ps1:187]
+- [x] [Review][Patch] A malformed `/etc/os-release` (e.g. unquoted value with spaces as its last line) makes the `$(. /etc/os-release && printf ...)` substitution fail, so `set -e` exits with a raw shell error instead of the actionable Arch-only message; fall back to an empty `DISTRO` on sourcing failure [setup.sh:36]
+- [x] [Review][Patch] Restore the `# shellcheck source=/dev/null` directive removed above the `/etc/os-release` source line [setup.sh:36]
+- [x] [Review][Patch] README forbid only matches the literal `.\setup.ps1`; broaden to any `setup.ps1` mention (`./setup.ps1`, `pwsh -File setup.ps1`) [tests/validate-readme.ps1:69]
+- [x] [Review][Patch] Drop the stale `# implement next, before 2-3` comment on the 2-6 entry [_bmad-output/implementation-artifacts/sprint-status.yaml:62]
+- [x] [Review][Defer] Guard-order static check keys on the first occurrence of the message text `only Arch Linux is supported`, not the `if [[ "$DISTRO" != "arch" ]]` guard itself; a comment with that text above `sudo pacman` would mask a moved guard [tests/validate-setup.ps1:93] — deferred, spec-defined check, low risk
+- [x] [Review][Defer] No scenario covers a quoted `ID="arch"` (accepted) or an os-release with no `ID` line (refused as `unknown`) [tests/validate-setup.ps1:450] — deferred, coverage gap, behaviour correct by inspection
 
 ## Dev Notes
 

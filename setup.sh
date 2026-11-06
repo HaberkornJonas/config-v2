@@ -31,9 +31,11 @@ if ! command -v sudo >/dev/null 2>&1; then
 fi
 
 # Read ID in a subshell so os-release fields cannot overwrite script variables (AD-7).
+# A malformed file yields an empty ID and falls through to the actionable error below.
 DISTRO=""
 if [[ -r /etc/os-release ]]; then
-  DISTRO="$(. /etc/os-release && printf '%s' "${ID:-}")"
+  # shellcheck source=/dev/null
+  DISTRO="$(. /etc/os-release >/dev/null 2>&1; printf '%s' "${ID:-}")" || DISTRO=""
 fi
 if [[ "$DISTRO" != "arch" ]]; then
   echo "ERROR: Unsupported distro '${DISTRO:-unknown}': only Arch Linux is supported (/etc/os-release must have ID=arch). Run ./setup.sh on an Arch Linux machine (WSL or VM)." >&2
@@ -54,22 +56,46 @@ if ! command -v chezmoi >/dev/null 2>&1; then
   exit 1
 fi
 
-# --- (3) User-level installs and stateful assets, run as the target user (no sudo) ---
-# fnm via the official curl installer
-echo "INFO: Installing fnm via official curl installer."
-curl -fsSL https://fnm.vercel.app/install | bash
+if ! command -v zsh >/dev/null 2>&1; then
+  echo "ERROR: zsh is not installed after the package stage. Check packages/arch.txt and the pacman output." >&2
+  exit 1
+fi
 
-# --- SSH key: detect-before-mutate (AC 4, 5, 8, AD-4, AD-7) ---
-# NOTE: ~/.ssh/config is chezmoi-managed — never written here (AD-7)
+# --- (3) Stateful assets: detect before mutate, never chezmoi-managed (AD-5; README "Path Ownership") ---
+TARGET_USER="$(id -un)"
+# Must match the fnm path in dotfiles/dot_zshrc.
+FNM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
+
+# fnm: installed once. --skip-shell keeps the installer out of shell rc files; zsh integration is chezmoi-managed.
+if [[ -x "$FNM_DIR/fnm" ]]; then
+  echo "INFO: fnm already installed at $FNM_DIR — skipping installer."
+else
+  echo "INFO: Installing fnm to $FNM_DIR via the official curl installer."
+  curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir "$FNM_DIR" --skip-shell
+fi
+
+# Login shell: zsh, changed only when it is not zsh already.
+ZSH_PATH="$(command -v zsh)"
+CURRENT_SHELL="$(getent passwd "$TARGET_USER" | cut -d: -f7)"
+if [[ "$(basename "${CURRENT_SHELL:-none}")" == "zsh" ]]; then
+  echo "INFO: Login shell for $TARGET_USER is already zsh — skipping."
+else
+  echo "INFO: Changing login shell for $TARGET_USER to $ZSH_PATH (takes effect in the next login session)."
+  sudo chsh -s "$ZSH_PATH" "$TARGET_USER"
+fi
+
+# SSH key: generated once, never overwritten. ~/.ssh/config is user-owned; neither setup.sh nor chezmoi writes it.
 if [[ -f "$SSH_KEY_FILE" ]]; then
   echo "INFO: SSH key already exists at $SSH_KEY_FILE — skipping generation."
+elif [[ -f "$SSH_KEY_FILE.pub" ]]; then
+  echo "INFO: Found $SSH_KEY_FILE.pub without its private key — skipping generation so the public key is not overwritten. Restore the private key or remove the .pub file, then rerun ./setup.sh."
 else
   echo "INFO: Generating SSH key at $SSH_KEY_FILE."
-  mkdir -p "$(dirname "$SSH_KEY_FILE")"
+  mkdir -p -m 700 "$(dirname "$SSH_KEY_FILE")"
   ssh-keygen -t rsa -b 4096 -C "$GIT_USER_EMAIL" -f "$SSH_KEY_FILE" -N ""
 fi
 
-# --- GPG key: detect-before-mutate (AC 6, 8, AD-4) ---
+# GPG key: checked only, never written by setup.sh.
 if gpg --list-keys "$GPG_FINGERPRINT" &>/dev/null; then
   echo "INFO: GPG key $GPG_FINGERPRINT already registered — skipping."
 else

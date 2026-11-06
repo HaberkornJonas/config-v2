@@ -66,11 +66,41 @@ if ($failures.Count -eq 0) {
         @{ Label = 'Windows Companion Bootstrap section'; Pattern = '(?im)^##\s+Windows Companion Bootstrap\s*$' },
         @{ Label = 'removed Ubuntu manifest reference'; Pattern = 'packages/ubuntu\.txt' },
         @{ Label = 'removed Scoop/winget manifest reference'; Pattern = 'packages/(scoop|winget)\.txt' },
-        @{ Label = 'removed setup.ps1 command'; Pattern = [regex]::Escape('.\setup.ps1') }
+        @{ Label = 'removed setup.ps1 command'; Pattern = '(?i)setup\.ps1' }
     )
     foreach ($check in $forbiddenReadmeChecks) {
         if ($readmeContent -match $check.Pattern) {
             $failures.Add("README still contains a $($check.Label).")
+        }
+    }
+
+    # AD-5 classification artifact: every bootstrap-touched path has exactly one category.
+    $ownershipMatch = [regex]::Match($readmeContent, '(?ims)^##\s+Path Ownership\s*$(?<body>.*?)(?=^##\s|\z)')
+    if (-not $ownershipMatch.Success) {
+        $failures.Add('Missing README requirement: Path Ownership section.')
+    }
+    else {
+        $ownership = $ownershipMatch.Groups['body'].Value
+        $requiredOwnershipPaths = @(
+            '~/.zshrc', '~/.gitconfig', '~/.config/starship.toml', '~/.config/nvim/init.lua', '~/.config/tmux/tmux.conf',
+            '~/.config/chezmoi/chezmoi.toml', '$SSH_KEY_FILE', '~/.gnupg', '~/.local/share/fnm', 'Login shell', '~/.local/share/chezmoi'
+        )
+        $rows = @($ownership -split "`r?`n" | Where-Object { $_ -match '^\s*\|' -and $_ -notmatch '^\s*\|\s*Path\s*\|' -and $_ -notmatch '^\s*\|[\s:|-]+\|\s*$' })
+        foreach ($path in $requiredOwnershipPaths) {
+            # Exactly one table row per path: prose mentions do not count, and a second row would allow a second category.
+            $pathRows = @($rows | Where-Object { $_.Contains($path) }).Count
+            if ($pathRows -ne 1) {
+                $failures.Add("README Path Ownership table must list $path in exactly one row (found $pathRows).")
+            }
+        }
+        if ($rows.Count -eq 0) {
+            $failures.Add('README Path Ownership section has no table rows.')
+        }
+        foreach ($row in $rows) {
+            $categories = [regex]::Matches($row, '\b(stateful-asset|chezmoi-managed)\b').Count
+            if ($categories -ne 1) {
+                $failures.Add("README Path Ownership row must have exactly one category (found $categories): $($row.Trim())")
+            }
         }
     }
 

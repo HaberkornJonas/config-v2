@@ -4,7 +4,7 @@ baseline_commit: bf8468e4a634e8da86ad1bde53228b03f0cf4bd3
 
 # Story 2.5: Refresh Arch Linux Documentation and README Validation
 
-Status: ready-for-dev
+Status: review
 
 > **Sequencing:** last story of Epic 2. It builds on Stories 2.1 to 2.4 and 2.6 (all done). Those stories deliberately left README wording alone; this story owns the full README rewrite, and `tests/validate-readme.ps1` is its test. No production script changes: `setup.sh`, `tests/verify-setup.sh`, `dotfiles/**` and `packages/arch.txt` stay as they are.
 
@@ -34,17 +34,17 @@ Concrete interpretation (binding for this story):
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Red phase — update `tests/validate-readme.ps1` (AC: 3)
-  - [ ] Remove the two-repo required check and the `DOTFILES_REPO` entry from `$setupValuesToBlock`.
-  - [ ] Add the new required and forbidden checks (see "validate-readme.ps1 changes").
-  - [ ] Run it against the current README and confirm it goes red on every new check and on the stale two-repo wording.
-- [ ] Task 2: Rewrite `README.md` (AC: 1, 2)
-  - [ ] Intro and scope line, Quick Start (unchanged commands), step 4 rewording, local-checkout contract, update flow, `## Verification`, keep `## Path Ownership` intact, `## Public-Safe Rules`, `## Not Supported Yet`, rewritten `## Architecture Overview`, short maintainer `## Validation` list.
-  - [ ] Check the README against "Do not write" below.
-- [ ] Task 3: Green phase (AC: 3)
-  - [ ] `tests\validate-readme.ps1` passes.
-  - [ ] Run `validate-setup.ps1`, `validate-dotfiles.ps1` and `validate-wsl-test-ca.ps1` once to prove nothing else regressed (docs only, so expect green).
-- [ ] Task 4: Mutation checks on temp copies of README (each must go red, then discard) (AC: 3)
+- [x] Task 1: Red phase — update `tests/validate-readme.ps1` (AC: 3)
+  - [x] Remove the two-repo required check and the `DOTFILES_REPO` entry from `$setupValuesToBlock`.
+  - [x] Add the new required and forbidden checks (see "validate-readme.ps1 changes").
+  - [x] Run it against the current README and confirm it goes red on every new check and on the stale two-repo wording.
+- [x] Task 2: Rewrite `README.md` (AC: 1, 2)
+  - [x] Intro and scope line, Quick Start (unchanged commands), step 4 rewording, local-checkout contract, update flow, `## Verification`, keep `## Path Ownership` intact, `## Public-Safe Rules`, `## Not Supported Yet`, rewritten `## Architecture Overview`, short maintainer `## Validation` list.
+  - [x] Check the README against "Do not write" below.
+- [x] Task 3: Green phase (AC: 3)
+  - [x] `tests\validate-readme.ps1` passes.
+  - [x] Run `validate-setup.ps1`, `validate-dotfiles.ps1` and `validate-wsl-test-ca.ps1` once to prove nothing else regressed (docs only, so expect green).
+- [x] Task 4: Mutation checks on temp copies of README (each must go red, then discard) (AC: 3)
   - (a) README step 4 says "separate dotfiles repo" → forbidden check.
   - (b) README mentions `DOTFILES_REPO` → forbidden check.
   - (c) remove the `## Verification` section → required check.
@@ -53,7 +53,7 @@ Concrete interpretation (binding for this story):
   - (f) paste the GPG fingerprint from `setup.sh` into README → "README exposes setup.sh value".
   - (g) add `setup.ps1` or a `## Windows Companion Bootstrap` heading → existing forbid.
   - (h) remove the `## Public-Safe Rules` section → required check.
-- [ ] Task 5: Scope guard — `git status` shows only the files in the File Structure table.
+- [x] Task 5: Scope guard — `git status` shows only the files in the File Structure table.
 
 ## Dev Notes
 
@@ -215,12 +215,31 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\validate-wsl-test-ca.p
 
 ### Agent Model Used
 
+AI assistant (Copilot SDK in VS Code), dev-story workflow
+
 ### Debug Log References
+
+- Red phase: updated `validate-readme.ps1` against the old README failed on all 16 expected points (in-repo explanation, same-checkout sentence, Arch-only statement, update flow, Verification section, failure signal, five stage tags, Not Supported Yet, Public-Safe Rules, separate-repo, two-repo and dotfiles-repo wording).
+- First run also hit a PowerShell bug in the new section parser (`$(` inside a double-quoted pattern); fixed by building the pattern with string concatenation.
+- Green: after the README rewrite the validator failed once on `tests\validate-setup.ps1` in the new Validation section, because the existing `setup\.ps1` forbid was an unanchored substring match. Tightened it to `(?<![\w-])setup\.ps1`; `./setup.ps1` is still caught (mutation g).
+- Mutations on a temp copy of README and validator, all red: (a) separate dotfiles repo wording, (b) `DOTFILES_REPO`, (c) no Verification section, (d) no Not Supported Yet, (e) no `git pull` flow, (f) GPG fingerprint pasted in, (g) `./setup.ps1` and a `## Windows Companion Bootstrap` heading, (h) no Public-Safe Rules. Temp files removed.
+- Regression: `validate-setup.ps1`, `validate-dotfiles.ps1`, `validate-wsl-test-ca.ps1` passed; `wsl -l -q` shows only `archlinux` before and after.
 
 ### Completion Notes List
 
+- README now describes the one-repo model: `dotfiles/` is part of `config-v2`, the same-checkout contract (`packages/arch.txt` and `dotfiles/`, actionable failure, no root), an "Updating an existing machine" flow (`git pull`, then `chezmoi apply`, moved-checkout note), a `## Verification` section with stage table, `## Public-Safe Rules`, `## Not Supported Yet` (Windows, other distros), a one-repo Architecture Overview and a maintainer `## Validation` list. `## Path Ownership` is unchanged.
+- `validate-readme.ps1`: removed the two-repo check and the dead `DOTFILES_REPO` entry; added required checks (in-repo, same checkout, Arch-only, update flow, Verification section, failure signal, stage tags, Not Supported Yet and Public-Safe Rules section bodies) and forbidden checks (`DOTFILES_REPO`, separate/second dotfiles repo, two-repo, dotfiles repo).
+- Decision: the `setup.ps1` forbid was anchored so validator file names such as `validate-setup.ps1` are not flagged. This is test-only and keeps the intent.
+- No production script or dotfile changed.
+
 ### File List
+
+- `README.md` (modified)
+- `tests/validate-readme.ps1` (modified)
+- `_bmad-output/implementation-artifacts/2-5-refresh-arch-linux-documentation-and-readme-validation.md` (modified: status/record)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified: status)
 
 ## Change Log
 
 - 2026-11-06: Story created (ready-for-dev).
+- 2026-11-06: README rewritten for the in-repo, Arch-only model and `validate-readme.ps1` assertions replaced. Status → review.

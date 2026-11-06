@@ -46,8 +46,28 @@ if ($failures.Count -eq 0) {
             Pattern = '(?is)(setup\.sh.*?reads.*?packages/arch\.txt.*?same checkout.*?supported bootstrap path)'
         },
         @{
-            Label = 'Two-repo architecture explanation'
-            Pattern = '(?is)config-v2.*bootstrap.*dotfiles repo.*chezmoi'
+            Label = 'in-repo dotfiles explanation'
+            Pattern = '(?is)dotfiles/.{0,40}\bpart of\b.{0,10}config-v2'
+        },
+        @{
+            Label = 'dotfiles read from the same checkout'
+            Pattern = '(?is)setup\.sh.{0,40}reads.{0,60}packages/arch\.txt.{0,20}and.{0,20}dotfiles/.{0,60}same checkout'
+        },
+        @{
+            Label = 'Arch Linux only statement'
+            Pattern = '(?is)Arch Linux \(WSL or VM\).{0,80}only supported'
+        },
+        @{
+            Label = 'update flow'
+            Pattern = '(?is)git pull.{0,200}chezmoi apply'
+        },
+        @{
+            Label = 'Verification section'
+            Pattern = '(?im)^##\s+Verification\s*$'
+        },
+        @{
+            Label = 'verification failure signal'
+            Pattern = [regex]::Escape('ERROR: [<stage>]')
         },
         @{
             Label = 'documented verify-only command'
@@ -65,6 +85,31 @@ if ($failures.Count -eq 0) {
         }
     }
 
+    foreach ($stageTag in '[packages]', '[stateful]', '[dotfiles]', '[shell]', '[editor]') {
+        if (-not $readmeContent.Contains($stageTag)) {
+            $failures.Add("Missing README requirement: verification stage tag $stageTag.")
+        }
+    }
+
+    # Section-body checks: the section must exist and mention the required topics.
+    $sectionChecks = @(
+        @{ Heading = 'Not Supported Yet'; Patterns = @('(?i)windows', '(?i)other (linux )?distro') },
+        @{ Heading = 'Public-Safe Rules'; Patterns = @('(?i)secret', '(?i)test fixture') }
+    )
+    foreach ($section in $sectionChecks) {
+        $sectionPattern = '(?ims)^##\s+' + [regex]::Escape($section.Heading) + '\s*$(?<body>.*?)(?=^##\s|\z)'
+        $sectionMatch = [regex]::Match($readmeContent, $sectionPattern)
+        if (-not $sectionMatch.Success) {
+            $failures.Add("Missing README requirement: $($section.Heading) section.")
+            continue
+        }
+        foreach ($pattern in $section.Patterns) {
+            if ($sectionMatch.Groups['body'].Value -notmatch $pattern) {
+                $failures.Add("README $($section.Heading) section must match $pattern.")
+            }
+        }
+    }
+
     if ($readmeContent -match '(?im)\bconfig\.sh\b') {
         $failures.Add('README still references config.sh after the inline configuration change.')
     }
@@ -74,7 +119,11 @@ if ($failures.Count -eq 0) {
         @{ Label = 'Windows Companion Bootstrap section'; Pattern = '(?im)^##\s+Windows Companion Bootstrap\s*$' },
         @{ Label = 'removed Ubuntu manifest reference'; Pattern = 'packages/ubuntu\.txt' },
         @{ Label = 'removed Scoop/winget manifest reference'; Pattern = 'packages/(scoop|winget)\.txt' },
-        @{ Label = 'removed setup.ps1 command'; Pattern = '(?i)setup\.ps1' }
+        @{ Label = 'removed setup.ps1 command'; Pattern = '(?i)(?<![\w-])setup\.ps1' },
+        @{ Label = 'DOTFILES_REPO reference'; Pattern = 'DOTFILES_REPO' },
+        @{ Label = 'separate dotfiles repository reference'; Pattern = '(?i)\b(separate|second|own) dotfiles repo' },
+        @{ Label = 'two-repo model reference'; Pattern = '(?i)two-repo' },
+        @{ Label = 'dotfiles repo reference'; Pattern = '(?i)\bdotfiles repo\b' }
     )
     foreach ($check in $forbiddenReadmeChecks) {
         if ($readmeContent -match $check.Pattern) {
@@ -126,7 +175,6 @@ if ($failures.Count -eq 0) {
     }
 
     $setupValuesToBlock = @{
-        'DOTFILES_REPO' = $null
         'GIT_USER_EMAIL' = $null
         'GPG_FINGERPRINT' = $null
         'SSH_KEY_FILE' = $null

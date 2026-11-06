@@ -1,6 +1,6 @@
 # config-v2
 
-`config-v2` is the bootstrap repository for bringing up an Arch Linux development machine (WSL or VM) from a local checkout.
+`config-v2` is the bootstrap repository for bringing up an Arch Linux development machine from a local checkout. Arch Linux (WSL or VM) is the only supported target. The `dotfiles/` directory is part of `config-v2`, so one clone holds the bootstrap logic, the package manifest and the managed configuration.
 
 ## Linux Quick Start
 
@@ -21,7 +21,7 @@ chmod +x ./setup.sh
 
 `setup.sh` carries its bootstrap configuration inline. If you need different values in your own copy or fork, update the configuration block at the top of `setup.sh` before you run that variant.
 
-`setup.sh` reads `packages/arch.txt` from the same checkout. Running the script from the cloned repository is the supported bootstrap path.
+`setup.sh` reads `packages/arch.txt` and `dotfiles/` from the same checkout. Running the script from the cloned repository is the supported bootstrap path. If a repo-local asset is missing, `setup.sh` exits with an actionable error before it changes anything. Run it as a normal user that has `sudo`; it refuses to run as root.
 
 ### What the Linux bootstrap does
 
@@ -30,10 +30,36 @@ The Linux entry point is `setup.sh` in your local checkout. The script then:
 1. loads the bootstrap configuration declared at the top of the script
 2. checks that the host is Arch Linux and installs packages from `packages/arch.txt` in this repository
 3. prepares stateful assets (fnm, zsh as login shell, SSH key) without overwriting any that already exist
-4. runs `chezmoi init --apply` to apply your user configuration from the separate dotfiles repo
+4. runs `chezmoi init --apply` to apply the managed configuration from `dotfiles/` in this checkout
 5. runs the smoke verification in `tests/verify-setup.sh` (packages, stateful assets, managed dotfiles, zsh and Neovim entrypoints) and exits non-zero with an `ERROR: [stage]` line for each broken part
 
 Run `./setup.sh --verify` at any time to re-check an existing machine without changing anything.
+
+### Updating an existing machine
+
+Pull the latest changes in your checkout, then apply them:
+
+```bash
+cd config-v2
+git pull
+chezmoi apply
+```
+
+`chezmoi init` stored the checkout's `dotfiles/` directory as the chezmoi source, so a plain `chezmoi apply` needs no flags. Rerun `./setup.sh` instead when you also want the package, stateful-asset and verification stages to run again. If you move the checkout, rerun `./setup.sh` from the new location so the stored source path is regenerated.
+
+## Verification
+
+Verification is the last stage of `./setup.sh` and can also run on its own with `./setup.sh --verify`. It only reads the machine: it never installs, applies, generates or deletes anything. It runs every check, so one run lists all broken parts. Each failure prints `ERROR: [<stage>] <what is wrong>. <how to fix>`, and the run exits non-zero. `Bootstrap complete.` is printed only after verification passes.
+
+| Stage | What is checked |
+| --- | --- |
+| `[packages]` | every entry of `packages/arch.txt` is installed, and the key commands are on `PATH` |
+| `[stateful]` | fnm is installed, the SSH key exists (a `.pub` file without its private key fails), the login shell is zsh |
+| `[dotfiles]` | the chezmoi source is this checkout's `dotfiles/`, `chezmoi verify` reports no drift, every managed file exists |
+| `[shell]` | `~/.zshrc` exists and parses |
+| `[editor]` | Neovim loads the managed `init.lua` |
+
+A configured GPG key that is missing from your keyring is only a warning: importing the key stays a manual step. These are presence and parse checks, not a full test of every tool.
 
 ## Path Ownership
 
@@ -55,11 +81,41 @@ Every path the bootstrap touches has exactly one owner: chezmoi rewrites managed
 
 `~/.ssh/config` is not listed: it stays yours, and neither `setup.sh` nor chezmoi writes it. Shell history and zinit plugins are created by zsh at runtime, not by the bootstrap.
 
+## Public-Safe Rules
+
+This repository is public and is also the test fixture for repeated end-to-end bootstrap runs, so everything tracked in it must be safe to publish and safe to apply to a fresh machine:
+
+- no secret is committed: no private keys, passwords, tokens or machine-unique credentials
+- personal values in `dotfiles/` are templated or come from the configuration block at the top of `setup.sh`, which holds only public-safe values (identity, GPG fingerprint, SSH key path)
+- the SSH private key and GPG private keys stay on the machine; chezmoi never manages them (see Path Ownership)
+- this README does not repeat the configuration values from `setup.sh`
+
+## Not Supported Yet
+
+Only the Arch Linux path is shipped and tested. These targets are deferred:
+
+- Windows: no native or PowerShell bootstrap; use an Arch Linux WSL instance instead
+- other Linux distros (for example Ubuntu): no package manifest and no setup path
+
+`setup.sh` exits during preflight on any host that is not Arch Linux, before it changes anything. Supporting another target would need a new architecture decision.
+
 ## Architecture Overview
 
-This project follows a strict two-repo model:
+`config-v2` is a single repository with one execution contract: clone it, then run `./setup.sh` from the checkout.
 
-- `config-v2` owns bootstrap orchestration, inline bootstrap configuration, and package manifests
-- the dotfiles repo owns user configuration managed by chezmoi
+- `setup.sh` orchestrates the bootstrap in a fixed order and carries the inline bootstrap configuration
+- `packages/arch.txt` is the package manifest installed through pacman
+- `dotfiles/` is the chezmoi source tree for the managed configuration; it is applied from the local checkout
+- `tests/` holds the repo-local smoke verification (`verify-setup.sh`) and the validators for the scripts and this README
 
-That split keeps bootstrap orchestration in this repo while letting `setup.sh` delegate user configuration application to chezmoi.
+`setup.sh` sequences the stages and delegates: pacman installs packages, chezmoi applies and reconciles the managed files, and verification checks the result.
+
+## Validation
+
+Maintainers run the validators from Windows PowerShell. The setup and dotfiles validators create a disposable WSL Arch test instance named `config-v2-test`; run them one at a time.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\validate-readme.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\validate-setup.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\validate-dotfiles.ps1
+```

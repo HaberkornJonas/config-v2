@@ -31,6 +31,9 @@ The Linux entry point is `setup.sh` in your local checkout. The script then:
 2. checks that the host is Arch Linux and installs packages from `packages/arch.txt` in this repository
 3. prepares stateful assets (fnm, zsh as login shell, SSH key) without overwriting any that already exist
 4. runs `chezmoi init --apply` to apply your user configuration from the separate dotfiles repo
+5. runs the smoke verification in `tests/verify-setup.sh` (packages, stateful assets, managed dotfiles, zsh and Neovim entrypoints) and exits non-zero with an `ERROR: [stage]` line for each broken part
+
+Run `./setup.sh --verify` at any time to re-check an existing machine without changing anything.
 
 ## Path Ownership
 

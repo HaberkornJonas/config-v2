@@ -20,3 +20,9 @@
 - setup.sh: fnm install is not verified afterwards (`$FNM_DIR/fnm` may be absent even when the installer exits 0, causing a reinstall on every rerun); the remote installer is unpinned.
 - setup.sh: a failing `sudo chsh` (non-local NSS user, path not in `/etc/shells`) aborts the bootstrap before SSH key generation and the chezmoi apply.
 - tests/validate-setup.ps1: scenario K seeds no `~/.gnupg` to prove it is untouched; the `curl` shim serves the fake fnm installer for any URL.
+
+## Deferred from: code review of 2-4-add-smoke-verification-for-integrated-bootstrap (2026-11-06)
+
+- tests/verify-setup.sh: the Neovim headless check has no timeout and may write state files (undo/log dirs); acceptable while init.lua is plugin-free.
+- tests/verify-setup.sh: an empty SSH key file passes the presence check, and ZDOTDIR is ignored when locating ~/.zshrc.
+- tests/verify-setup.sh: the command-on-PATH list duplicates packages/arch.txt, and the validator's forbid scan masks quoted pass/fail/warn/echo text (documented trade-off).

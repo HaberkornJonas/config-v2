@@ -20,6 +20,26 @@ require_repo_asset_path() {
   printf '%s\n' "$absolute_path"
 }
 
+# --- Arguments: none = full bootstrap; --verify = preflight + smoke verification only (no mutation) ---
+VERIFY_ONLY=false
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--verify" ) ]]; then
+  echo "ERROR: Unknown arguments '$*'. Usage: ./setup.sh [--verify]" >&2
+  exit 1
+fi
+if [[ "${1:-}" == "--verify" ]]; then
+  VERIFY_ONLY=true
+fi
+
+# Runs the repo-local smoke verification (AD-6, AD-9 step 6). Exits non-zero with an actionable hint on failure.
+run_smoke_verification() {
+  echo "INFO: Running smoke verification (tests/verify-setup.sh)."
+  if ! env SSH_KEY_FILE="$SSH_KEY_FILE" GPG_FINGERPRINT="$GPG_FINGERPRINT" FNM_DIR="$FNM_DIR" \
+      bash "$(require_repo_asset_path "tests/verify-setup.sh")"; then
+    echo "ERROR: Smoke verification failed. Fix the [stage] items reported above, then rerun ./setup.sh (or ./setup.sh --verify to re-check only)." >&2
+    exit 1
+  fi
+}
+
 # --- (1) Preflight: target user, sudo, Arch-only guard, local checkout (AD-3, AD-7, AD-9). No mutation before this passes. ---
 if [[ "$EUID" -eq 0 ]]; then
   echo "ERROR: Do not run setup.sh as root. Run it as the user you are setting up; it calls sudo for system commands." >&2
@@ -46,6 +66,18 @@ fi
 require_repo_asset_path ".git" >/dev/null
 require_repo_asset_path "dotfiles/.chezmoi.toml.tmpl" >/dev/null
 require_repo_asset_path "packages/arch.txt" >/dev/null
+require_repo_asset_path "tests/verify-setup.sh" >/dev/null
+
+# Derived values (not configuration, AD-8). FNM_DIR is passed to verification, so it must be set before the verify-only branch.
+TARGET_USER="$(id -un)"
+# Must match the fnm path in dotfiles/dot_zshrc.
+FNM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
+
+if [[ "$VERIFY_ONLY" == true ]]; then
+  run_smoke_verification
+  echo "INFO: Verification complete; nothing was changed."
+  exit 0
+fi
 
 # --- (2) Install packages via pacman; only system commands run through sudo (AD-7) ---
 echo "INFO: Detected Arch Linux — installing packages via pacman."
@@ -62,10 +94,6 @@ if ! command -v zsh >/dev/null 2>&1; then
 fi
 
 # --- (3) Stateful assets: detect before mutate, never chezmoi-managed (AD-5; README "Path Ownership") ---
-TARGET_USER="$(id -un)"
-# Must match the fnm path in dotfiles/dot_zshrc.
-FNM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
-
 # fnm: installed once. --skip-shell keeps the installer out of shell rc files; zsh integration is chezmoi-managed.
 if [[ -x "$FNM_DIR/fnm" ]]; then
   echo "INFO: fnm already installed at $FNM_DIR — skipping installer."
@@ -110,5 +138,8 @@ fi
 echo "INFO: Applying dotfiles from $REPO_ROOT/dotfiles via chezmoi."
 env GIT_USER_NAME="$GIT_USER_NAME" GIT_USER_EMAIL="$GIT_USER_EMAIL" GPG_FINGERPRINT="$GPG_FINGERPRINT" \
   chezmoi init --apply --force --no-tty --source "$(require_repo_asset_path "dotfiles")"
+
+# --- (5) Smoke verification (AD-6, AD-9): setup succeeds only when the machine is verified usable (NFR7) ---
+run_smoke_verification
 
 echo "INFO: Bootstrap complete."

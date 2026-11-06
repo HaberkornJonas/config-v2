@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $setupPath = Join-Path $repoRoot 'setup.sh'
+$verifyPath = Join-Path $repoRoot 'tests/verify-setup.sh'
 
 . (Join-Path $PSScriptRoot 'lib/WslTestInstance.ps1')
 
@@ -21,8 +22,12 @@ $fixtureRoot = "$testHome/config-v2"
 $shimDir = '/opt/config-v2-shims'
 $shimLog = '/var/tmp/config-v2-shims.log'
 $pacmanStdin = '/var/tmp/config-v2-pacman-stdin.txt'
+$pacmanDb = '/var/tmp/config-v2-pacman-db.txt'
+# Toolchain binaries faked so the test does not download the full manifest (dotnet-sdk, docker).
+$fakeToolDir = '/opt/config-v2-fake-tools'
+$fakeTools = @('docker', 'dotnet', 'starship', 'tmux', 'zoxide', 'fzf')
 $basePath = '/usr/local/bin:/usr/bin'
-$shimPath = "${shimDir}:$basePath"
+$shimPath = "${shimDir}:${fakeToolDir}:$basePath"
 # setpriv (not runuser/su) so no PAM/systemd user session keeps the test user alive between scenarios.
 $asTester = "setpriv --reuid=$testUser --regid=$testUser --init-groups --"
 
@@ -81,11 +86,66 @@ $requiredSetupPatterns = @(
     @{ Label = 'Arch-only guard message (AD-7)'; Pattern = 'only Arch Linux is supported' },
     @{ Label = 'fnm installer with pinned dir and --skip-shell (AD-5)'; Pattern = 'curl -fsSL https://fnm\.vercel\.app/install \| bash -s -- --install-dir "\$FNM_DIR" --skip-shell' },
     @{ Label = 'fnm dir matching dot_zshrc'; Pattern = 'FNM_DIR="\$\{XDG_DATA_HOME:-\$HOME/\.local/share\}/fnm"' },
-    @{ Label = 'login shell change via sudo chsh'; Pattern = 'sudo chsh -s "\$ZSH_PATH" "\$TARGET_USER"' }
+    @{ Label = 'login shell change via sudo chsh'; Pattern = 'sudo chsh -s "\$ZSH_PATH" "\$TARGET_USER"' },
+    @{ Label = 'verify-only usage error'; Pattern = 'Usage: \./setup\.sh \[--verify\]' },
+    @{ Label = 'smoke verification invocation'; Pattern = 'bash "\$\(require_repo_asset_path "tests/verify-setup\.sh"\)"' },
+    @{ Label = 'verification script preflight check'; Pattern = 'require_repo_asset_path "tests/verify-setup\.sh" >/dev/null' }
 )
 foreach ($check in $requiredSetupPatterns) {
     if ($setupContent -notmatch $check.Pattern) {
         $failures.Add("setup.sh is missing the $($check.Label).")
+    }
+}
+
+# Smoke verification is the last stage (AD-9): after chezmoi apply, before the completion message.
+$verifyCallIndex = $setupContent.LastIndexOf('run_smoke_verification')
+$applyIndex = $setupContent.IndexOf('chezmoi init --apply')
+$completeIndex = $setupContent.IndexOf('INFO: Bootstrap complete.')
+if ($verifyCallIndex -lt 0 -or $applyIndex -lt 0 -or $completeIndex -lt 0 -or $verifyCallIndex -lt $applyIndex -or $verifyCallIndex -gt $completeIndex) {
+    $failures.Add('setup.sh must call run_smoke_verification after chezmoi init --apply and before INFO: Bootstrap complete.')
+}
+# Argument parsing comes before the root check so a bad argument fails without any side effect.
+$usageIndex = $setupContent.IndexOf('Usage: ./setup.sh')
+$rootCheckIndex = $setupContent.IndexOf('Do not run setup.sh as root')
+if ($usageIndex -lt 0 -or $rootCheckIndex -lt 0 -or $usageIndex -gt $rootCheckIndex) {
+    $failures.Add('setup.sh must parse its arguments before the root check.')
+}
+
+# --- Static checks on tests/verify-setup.sh (AC 1, 2; AD-5, AD-6) ---
+if (-not (Test-Path -LiteralPath $verifyPath -PathType Leaf)) {
+    $failures.Add('tests/verify-setup.sh is missing.')
+}
+else {
+    if ([IO.File]::ReadAllBytes($verifyPath) -contains 13) {
+        $failures.Add('tests/verify-setup.sh contains CR characters; it must use LF line endings (.gitattributes).')
+    }
+    $verifyContent = [IO.File]::ReadAllText($verifyPath)
+    # Commands only: comment lines and the quoted message of pass/fail/warn/echo are not scanned,
+    # so hints like "run: sudo pacman -S --needed <pkg>" do not count as commands.
+    $verifyCommands = (($verifyContent -split "`r?`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n") -replace '(\b(?:pass|fail|warn|echo)\b[^"\n]*)"(?:[^"\\\n]|\\.)*"', '$1""'
+    $requiredVerifyFragments = @(
+        'pacman -Q', 'chezmoi verify', 'chezmoi source-path', 'chezmoi managed --include=files', 'zsh -n', 'nvim --headless', 'getent passwd',
+        'fail packages', 'fail stateful', 'fail dotfiles', 'fail shell', 'fail editor'
+    )
+    foreach ($fragment in $requiredVerifyFragments) {
+        if (-not $verifyCommands.Contains($fragment)) {
+            $failures.Add("tests/verify-setup.sh is missing '$fragment'.")
+        }
+    }
+    $forbiddenVerifyPatterns = @(
+        @{ Label = 'sudo'; Pattern = '\bsudo\b' },
+        @{ Label = 'package install or removal'; Pattern = 'pacman -(S|R|U)' },
+        @{ Label = 'chezmoi mutation'; Pattern = 'chezmoi (apply|init|update|add|re-add)\b' },
+        @{ Label = 'download'; Pattern = '\b(curl|wget)\b' },
+        @{ Label = 'login shell change'; Pattern = '\b(chsh|usermod)\b' },
+        @{ Label = 'SSH key generation'; Pattern = 'ssh-keygen' },
+        @{ Label = 'GPG import or key generation'; Pattern = 'gpg --(import|gen-key|full-generate-key|quick-gen-key)' },
+        @{ Label = 'set -e (a failing check must not abort the run)'; Pattern = '\bset\s+-[a-zA-Z]*e' }
+    )
+    foreach ($check in $forbiddenVerifyPatterns) {
+        if ($verifyCommands -match $check.Pattern) {
+            $failures.Add("tests/verify-setup.sh is read-only but contains $($check.Label).")
+        }
     }
 }
 
@@ -128,13 +188,19 @@ function Reset-Fixture([string]$mutation = ':') {
         "userdel -rf $testUser >/dev/null 2>&1 || true",
         "rm -rf $testHome /root/.gitconfig /root/.config/chezmoi /root/.local/share/chezmoi",
         "useradd -m -s /bin/bash $testUser",
+        # Disposable instance only: lets the chsh shim (running as the test user) really set the login shell.
+        'chmod 0666 /etc/passwd',
         'src="$(wslpath -a "$REPO_WINDOWS_PATH")"',
-        "mkdir -p $fixtureRoot",
+        "mkdir -p $fixtureRoot/tests",
         "cp -r `"`$src/setup.sh`" `"`$src/packages`" `"`$src/dotfiles`" $fixtureRoot/",
+        "cp `"`$src/tests/verify-setup.sh`" $fixtureRoot/tests/",
         "chown -R ${testUser}: $testHome",
         "$asTester git -C $fixtureRoot init -q",
-        "rm -f $shimLog $pacmanStdin",
+        "rm -f $shimLog $pacmanStdin $pacmanDb",
         "install -m 0666 /dev/null $shimLog",
+        "install -m 0666 /dev/null $pacmanDb",
+        "rm -rf $fakeToolDir && mkdir -p $fakeToolDir",
+        "for t in $($fakeTools -join ' '); do printf '#!/bin/sh\nexit 0\n' > $fakeToolDir/`$t && chmod 0755 $fakeToolDir/`$t; done",
         "cd $fixtureRoot",
         $mutation
     )
@@ -145,12 +211,12 @@ function Reset-Fixture([string]$mutation = ':') {
 }
 
 # Runs setup.sh from /tmp (a foreign working directory) with a minimal environment and no stdin.
-function Invoke-Setup([string]$runAs = $testUser, [string]$path = $shimPath) {
+function Invoke-Setup([string]$runAs = $testUser, [string]$path = $shimPath, [string]$arguments = '') {
     if ($runAs -eq 'root') {
-        $command = "cd /tmp && env -i HOME=/root USER=root LOGNAME=root PATH=$path $fixtureRoot/setup.sh </dev/null"
+        $command = "cd /tmp && env -i HOME=/root USER=root LOGNAME=root PATH=$path $fixtureRoot/setup.sh $arguments </dev/null"
     }
     else {
-        $command = "cd /tmp && $asTester env -i HOME=$testHome USER=$runAs LOGNAME=$runAs PATH=$path $fixtureRoot/setup.sh </dev/null"
+        $command = "cd /tmp && $asTester env -i HOME=$testHome USER=$runAs LOGNAME=$runAs PATH=$path $fixtureRoot/setup.sh $arguments </dev/null"
     }
     return Invoke-Instance $command
 }
@@ -161,6 +227,19 @@ function Invoke-AsTester([string]$command) {
 
 function Get-ShimLog {
     return (Invoke-Instance "cat $shimLog").Output
+}
+
+function Get-ShimLogLines {
+    return @((Get-ShimLog) -split "`r?`n" | Where-Object { $_ })
+}
+
+# Verification is read-only: every shim-log line written after $skip lines must be a plain pacman query.
+function Assert-OnlyPacmanQueries([string]$scenario, [int]$skip) {
+    foreach ($line in @(Get-ShimLogLines | Select-Object -Skip $skip)) {
+        if ($line -notmatch '^pacman -Q ') {
+            $failures.Add("[$scenario] verification ran a mutating or system command: $line")
+        }
+    }
 }
 
 function Assert-FailedBeforeMutation([string]$scenario, $result, [string]$expectedMessage) {
@@ -224,7 +303,18 @@ SHIM
 cat > $shimDir/pacman <<'SHIM'
 #!/bin/bash
 echo "pacman `$*" >> $shimLog
-if [ "`${@: -1}" = "-" ]; then cat > $pacmanStdin; fi
+if [ "`$1" = "-Q" ]; then
+  shift
+  rc=0
+  for pkg in "`$@"; do
+    if grep -qx -- "`$pkg" $pacmanDb; then echo "`$pkg 0-fixture"; else echo "error: package '`$pkg' was not found" >&2; rc=1; fi
+  done
+  exit `$rc
+fi
+if [ "`${@: -1}" = "-" ]; then
+  cat > $pacmanStdin
+  sed 's/#.*//; s/[[:space:]]//g' $pacmanStdin | grep -v '^`$' >> $pacmanDb || true
+fi
 SHIM
 cat > $shimDir/curl <<'SHIM'
 #!/bin/bash
@@ -240,6 +330,11 @@ SHIM
 cat > $shimDir/chsh <<'SHIM'
 #!/bin/bash
 echo "chsh `$*" >> $shimLog
+# Called as 'chsh -s <shell> <user>'; really sets the field so verification sees the change.
+awk -F: -v OFS=: -v u="`$3" -v s="`$2" '`$1==u{`$7=s}1' /etc/passwd > /tmp/config-v2-passwd.`$`$ && cat /tmp/config-v2-passwd.`$`$ > /etc/passwd
+rc=`$?
+rm -f /tmp/config-v2-passwd.`$`$
+exit `$rc
 SHIM
 chmod 0755 $shimDir/sudo $shimDir/pacman $shimDir/curl $shimDir/chsh
 "@
@@ -255,7 +350,7 @@ if ($setupContent) {
     try {
         $instanceReady = $false
         try {
-            New-ConfigV2TestInstance @('chezmoi', 'git', 'openssh', 'zsh')
+            New-ConfigV2TestInstance @('chezmoi', 'git', 'openssh', 'zsh', 'neovim')
             $setup = Invoke-Instance $shimSetup
             if ($setup.ExitCode -ne 0) { throw "Shim setup failed: $($setup.Output)" }
             $instanceReady = $true
@@ -269,6 +364,10 @@ if ($setupContent) {
             $syntax = Invoke-Instance "bash -n $fixtureRoot/setup.sh"
             if ($syntax.ExitCode -ne 0) {
                 $failures.Add("setup.sh failed bash -n: $($syntax.Output)")
+            }
+            $syntax = Invoke-Instance "bash -n $fixtureRoot/tests/verify-setup.sh"
+            if ($syntax.ExitCode -ne 0) {
+                $failures.Add("tests/verify-setup.sh failed bash -n: $($syntax.Output)")
             }
 
             # Scenario A: happy path as a non-root user from a foreign cwd, with legacy chezmoi state present.
@@ -302,6 +401,34 @@ if ($setupContent) {
                 }
                 if ($run.Output -notmatch 'Leaving legacy chezmoi source') {
                     $failures.Add("[$scenario] setup.sh did not report the legacy ~/.local/share/chezmoi source.")
+                }
+
+                # Smoke verification ran last and passed (AD-6, AD-9, NFR7).
+                $passedIndex = $run.Output.IndexOf('Verification passed')
+                $completeIndex = $run.Output.IndexOf('Bootstrap complete')
+                if ($passedIndex -lt 0 -or $completeIndex -lt 0 -or $passedIndex -gt $completeIndex) {
+                    $failures.Add("[$scenario] output does not show 'Verification passed' before 'Bootstrap complete'. Output: $($run.Output)")
+                }
+                if ($run.Output -match 'ERROR:') {
+                    $failures.Add("[$scenario] output contains an ERROR: line. Output: $($run.Output)")
+                }
+                if ($run.Output -notmatch [regex]::Escape('WARN: [stateful] GPG key')) {
+                    $failures.Add("[$scenario] verification did not warn about the missing fixture GPG key.")
+                }
+                if ($log -match '(?m)^sudo pacman -Q') {
+                    $failures.Add("[$scenario] verification queried packages through sudo. Shim log: $log")
+                }
+                $manifestPackages = @((Invoke-Instance "sed 's/#.*//; s/[[:space:]]//g' $fixtureRoot/packages/arch.txt | grep -v '^`$'").Output -split "`r?`n" | Where-Object { $_ })
+                if ($manifestPackages.Count -eq 0) {
+                    $failures.Add("[$scenario] could not read the fixture manifest.")
+                }
+                foreach ($package in $manifestPackages) {
+                    if ($log -notmatch "(?m)^pacman -Q $([regex]::Escape($package))\s*$") {
+                        $failures.Add("[$scenario] verification did not query package '$package' with a plain 'pacman -Q'.")
+                    }
+                }
+                if ((Invoke-Instance "getent passwd $testUser").Output.Trim() -notmatch ':/usr/bin/zsh$') {
+                    $failures.Add("[$scenario] login shell of $testUser is not /usr/bin/zsh after setup.sh.")
                 }
                 if (-not (Test-Instance "test -f $testHome/.local/share/chezmoi/legacy-marker")) {
                     $failures.Add("[$scenario] legacy ~/.local/share/chezmoi content was modified or deleted.")
@@ -387,6 +514,84 @@ if ($setupContent) {
                 if ($rerun.Output -notmatch 'fnm already installed') {
                     $failures.Add("[$scenario] rerun did not report the existing fnm install.")
                 }
+                foreach ($message in @('Verification passed', "Login shell for $testUser is already zsh")) {
+                    if ($rerun.Output -notmatch [regex]::Escape($message)) {
+                        $failures.Add("[$scenario] rerun output does not contain '$message'.")
+                    }
+                }
+                $chshRuns = @(Get-ShimLogLines | Where-Object { $_ -match '^chsh ' }).Count
+                if ($chshRuns -ne 1) {
+                    $failures.Add("[$scenario] chsh ran $chshRuns times across first run and rerun; expected 1.")
+                }
+
+                # Scenario M: --verify on the bootstrapped machine checks only and changes nothing (AC1a).
+                $scenario = 'M verify only'
+                $logBefore = @(Get-ShimLogLines).Count
+                $stateCommand = "cd $testHome && sha256sum $($managedTargets -join ' ') .ssh/id_rsa && stat -c %Y .config/chezmoi/chezmoi.toml"
+                $stateBefore = (Invoke-Instance $stateCommand).Output
+                $verifyRun = Invoke-Setup -arguments '--verify'
+                if ($verifyRun.ExitCode -ne 0) {
+                    $failures.Add("[$scenario] setup.sh --verify exited $($verifyRun.ExitCode). Output: $($verifyRun.Output)")
+                }
+                foreach ($message in @('Verification passed', 'nothing was changed')) {
+                    if ($verifyRun.Output -notmatch [regex]::Escape($message)) {
+                        $failures.Add("[$scenario] output does not contain '$message'. Output: $($verifyRun.Output)")
+                    }
+                }
+                if ($verifyRun.Output -match 'Applying dotfiles') {
+                    $failures.Add("[$scenario] setup.sh --verify applied dotfiles.")
+                }
+                Assert-OnlyPacmanQueries $scenario $logBefore
+                $stateAfter = (Invoke-Instance $stateCommand).Output
+                if ([string]::IsNullOrWhiteSpace($stateBefore) -or $stateAfter -ne $stateBefore) {
+                    $failures.Add("[$scenario] managed targets, SSH key or chezmoi config changed. Before: $stateBefore After: $stateAfter")
+                }
+
+                # Scenario N: broken outcomes are each reported with their stage; verification does not stop early or repair (AC2).
+                $scenario = 'N broken outcomes'
+                $break = @(
+                    "grep -vx tmux $pacmanDb > /tmp/config-v2-db.tmp || true",
+                    "cat /tmp/config-v2-db.tmp > $pacmanDb && rm -f /tmp/config-v2-db.tmp",
+                    "rm -f $fakeToolDir/tmux",
+                    "usermod -s /bin/bash $testUser",
+                    'chmod 0666 /etc/passwd',
+                    "$asTester rm -f $testHome/.config/nvim/init.lua",
+                    "$asTester sh -c 'echo if then >> $testHome/.zshrc'"
+                ) -join "`n"
+                $breakResult = Invoke-Instance $break
+                if ($breakResult.ExitCode -ne 0) { throw "[$scenario] could not break the fixture: $($breakResult.Output)" }
+                $logBefore = @(Get-ShimLogLines).Count
+                $brokenRun = Invoke-Setup -arguments '--verify'
+                if ($brokenRun.ExitCode -eq 0) {
+                    $failures.Add("[$scenario] setup.sh --verify exited 0 on a broken machine. Output: $($brokenRun.Output)")
+                }
+                $expectedErrors = @(
+                    "ERROR: [packages] Package 'tmux'",
+                    "ERROR: [packages] Command 'tmux'",
+                    "ERROR: [stateful] Login shell for $testUser is bash",
+                    'ERROR: [dotfiles] Managed dotfiles differ',
+                    'ERROR: [dotfiles] Managed file',
+                    'ERROR: [shell]',
+                    'ERROR: [editor]',
+                    'Verification failed: ',
+                    'Smoke verification failed'
+                )
+                foreach ($message in $expectedErrors) {
+                    if ($brokenRun.Output -notmatch [regex]::Escape($message)) {
+                        $failures.Add("[$scenario] output does not contain '$message'. Output: $($brokenRun.Output)")
+                    }
+                }
+                $failedCount = [regex]::Match($brokenRun.Output, 'Verification failed: (\d+) of')
+                if (-not $failedCount.Success -or [int]$failedCount.Groups[1].Value -lt 7) {
+                    $failures.Add("[$scenario] verification did not report at least 7 failed checks (stopped early?). Output: $($brokenRun.Output)")
+                }
+                if (Test-Instance "test -e $testHome/.config/nvim/init.lua") {
+                    $failures.Add("[$scenario] verification restored ~/.config/nvim/init.lua; it must only report.")
+                }
+                if (-not (Test-Instance "grep -qx 'if then' $testHome/.zshrc")) {
+                    $failures.Add("[$scenario] verification changed ~/.zshrc; it must only report.")
+                }
+                Assert-OnlyPacmanQueries $scenario $logBefore
             }
 
             # Scenario C: running as root is refused before any mutation.
@@ -412,6 +617,24 @@ if ($setupContent) {
             Reset-Fixture
             Assert-FailedBeforeMutation 'G no sudo' (Invoke-Setup -path $basePath) 'sudo is required'
 
+            # Scenario P: missing verification script fails in preflight (AD-3).
+            Reset-Fixture 'rm -f tests/verify-setup.sh'
+            Assert-FailedBeforeMutation 'P missing verify script' (Invoke-Setup) 'Missing tests/verify-setup.sh relative to setup.sh'
+
+            # Scenario Q: an unknown argument is rejected before anything else runs.
+            Reset-Fixture
+            Assert-FailedBeforeMutation 'Q unknown argument' (Invoke-Setup -arguments '--bogus') 'Usage: ./setup.sh [--verify]'
+
+            # Scenario R: running the verification script directly, without the setup.sh values, explains how to run it.
+            $scenario = 'R direct invocation'
+            $direct = Invoke-AsTester "bash $fixtureRoot/tests/verify-setup.sh"
+            if ($direct.ExitCode -ne 2) {
+                $failures.Add("[$scenario] tests/verify-setup.sh exited $($direct.ExitCode) without setup.sh values; expected 2. Output: $($direct.Output)")
+            }
+            if ($direct.Output -notmatch [regex]::Escape('Run verification via ./setup.sh --verify')) {
+                $failures.Add("[$scenario] output does not point to ./setup.sh --verify. Output: $($direct.Output)")
+            }
+
             # Scenario K: protected assets already exist on a first run; none is regenerated or changed (AD-5, FR3).
             $scenario = 'K protected assets pre-exist'
             $seed = @(
@@ -431,7 +654,7 @@ if ($setupContent) {
                 if ($log -match '(?m)^(fnm-installer|chsh) ') {
                     $failures.Add("[$scenario] setup.sh reinstalled fnm or changed the login shell although both were present. Shim log: $log")
                 }
-                foreach ($message in @('SSH key already exists', 'fnm already installed', "Login shell for $testUser is already zsh")) {
+                foreach ($message in @('SSH key already exists', 'fnm already installed', "Login shell for $testUser is already zsh", 'Verification passed')) {
                     if ($run.Output -notmatch [regex]::Escape($message)) {
                         $failures.Add("[$scenario] setup.sh output does not contain '$message'.")
                     }
@@ -453,12 +676,24 @@ if ($setupContent) {
                 }
             }
 
-            # Scenario L: an orphaned public key (private key missing) is never overwritten.
+            # Scenario L: an orphaned public key (private key missing) is never overwritten, and verification
+            # reports it after the dotfiles were applied (FR3, AC2).
             $scenario = 'L orphaned public key kept'
             Reset-Fixture "$asTester mkdir -p -m 700 $testHome/.ssh && $asTester sh -c `"printf orphan-public-key-fixture > $testHome/.ssh/id_rsa.pub`""
             $run = Invoke-Setup
-            if ($run.ExitCode -ne 0) {
-                $failures.Add("[$scenario] setup.sh exited $($run.ExitCode). Output: $($run.Output)")
+            if ($run.ExitCode -eq 0) {
+                $failures.Add("[$scenario] setup.sh exited 0; verification must fail on an orphaned public key. Output: $($run.Output)")
+            }
+            foreach ($message in @('ERROR: [stateful] Found', 'Smoke verification failed')) {
+                if ($run.Output -notmatch [regex]::Escape($message)) {
+                    $failures.Add("[$scenario] output does not contain '$message'. Output: $($run.Output)")
+                }
+            }
+            if ($run.Output -match 'Bootstrap complete') {
+                $failures.Add("[$scenario] setup.sh reported 'Bootstrap complete' although verification failed.")
+            }
+            if ((Invoke-AsTester 'chezmoi verify').ExitCode -ne 0) {
+                $failures.Add("[$scenario] dotfiles were not applied before verification ran.")
             }
             if ((Invoke-Instance "cat $testHome/.ssh/id_rsa.pub").Output.Trim() -ne 'orphan-public-key-fixture') {
                 $failures.Add("[$scenario] the existing ~/.ssh/id_rsa.pub was overwritten.")

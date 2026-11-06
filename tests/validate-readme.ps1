@@ -48,6 +48,14 @@ if ($failures.Count -eq 0) {
         @{
             Label = 'Two-repo architecture explanation'
             Pattern = '(?is)config-v2.*bootstrap.*dotfiles repo.*chezmoi'
+        },
+        @{
+            Label = 'documented verify-only command'
+            Pattern = [regex]::Escape('./setup.sh --verify')
+        },
+        @{
+            Label = 'smoke verification bootstrap step'
+            Pattern = '(?im)^\d+\.\s+.*smoke verification'
         }
     )
 

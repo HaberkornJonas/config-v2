@@ -1,6 +1,10 @@
+---
+baseline_commit: fe2eccbf5bb398473942e8663666ba3e9c79d7e5
+---
+
 # Story 2.4: Add Smoke Verification for Integrated Bootstrap
 
-Status: ready-for-dev
+Status: done
 
 > **Sequencing:** builds on Story 2.3 (`setup.sh` sections 1–4, scenarios A–L in `tests/validate-setup.ps1`) and Story 2.6 (Arch-only). Story 2.5 (README rewrite) comes after; this story only adds the minimum README lines its AC needs. It also closes two readiness-report items: Major #7 (the verification trigger is automatic *and* runnable standalone) and "assert zsh login shell in Story 2.4" (FR1 sub-requirement).
 
@@ -31,20 +35,20 @@ Concrete interpretation (binding for this story; decisions confirmed by Jonas 20
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Red phase — extend `tests/validate-setup.ps1` (AC: 1, 2)
-  - [ ] Instance packages `@('chezmoi', 'git', 'openssh', 'zsh', 'neovim')`. The editor check needs a real nvim; every other toolchain binary is faked (decision: fake toolchain).
-  - [ ] Shims and fixture reset as in "Test harness changes": pacman `-Q` fake db, `chsh` shim that really edits `/etc/passwd`, fake tool executables, copy `tests/verify-setup.sh` into the fixture.
-  - [ ] Static checks for `setup.sh` and `tests/verify-setup.sh` ("Static checks").
-  - [ ] Scenario changes A, B, L and new scenarios M, N, P, Q, R ("Scenario changes").
-  - [ ] Run it against the current tree. Record in the Debug Log which checks go red (expected: all new static checks, A "Verification passed", M–R, and L's new non-zero exit expectation).
-- [ ] Task 2: Red phase — extend `tests/validate-readme.ps1` (AC: 1). Require the documented `./setup.sh --verify` command and a bootstrap step that names smoke verification. Confirm it goes red.
-- [ ] Task 3: Create `tests/verify-setup.sh` per "Target `tests/verify-setup.sh`" (AC: 1, 2)
-- [ ] Task 4: Wire verification into `setup.sh` per "Target `setup.sh` changes" (AC: 1, 2)
-  - [ ] Argument parsing (`--verify` only), preflight asset check for `tests/verify-setup.sh`, derived `TARGET_USER`/`FNM_DIR` moved before the verify-only branch, `run_smoke_verification` function, final stage (5), `Bootstrap complete` after it.
-- [ ] Task 5: `.gitattributes` gets `tests/*.sh text eol=lf`. README gets a step 5 and the `./setup.sh --verify` sentence (AC: 1)
-- [ ] Task 6: Green phase + mutation checks (AC: 1, 2)
-  - [ ] All four validators pass under Windows PowerShell (commands in Testing Requirements).
-  - [ ] Mutation checks on temp copies (each must go red, then discard):
+- [x] Task 1: Red phase — extend `tests/validate-setup.ps1` (AC: 1, 2)
+  - [x] Instance packages `@('chezmoi', 'git', 'openssh', 'zsh', 'neovim')`. The editor check needs a real nvim; every other toolchain binary is faked (decision: fake toolchain).
+  - [x] Shims and fixture reset as in "Test harness changes": pacman `-Q` fake db, `chsh` shim that really edits `/etc/passwd`, fake tool executables, copy `tests/verify-setup.sh` into the fixture.
+  - [x] Static checks for `setup.sh` and `tests/verify-setup.sh` ("Static checks").
+  - [x] Scenario changes A, B, L and new scenarios M, N, P, Q, R ("Scenario changes").
+  - [x] Run it against the current tree. Record in the Debug Log which checks go red (expected: all new static checks, A "Verification passed", M–R, and L's new non-zero exit expectation).
+- [x] Task 2: Red phase — extend `tests/validate-readme.ps1` (AC: 1). Require the documented `./setup.sh --verify` command and a bootstrap step that names smoke verification. Confirm it goes red.
+- [x] Task 3: Create `tests/verify-setup.sh` per "Target `tests/verify-setup.sh`" (AC: 1, 2)
+- [x] Task 4: Wire verification into `setup.sh` per "Target `setup.sh` changes" (AC: 1, 2)
+  - [x] Argument parsing (`--verify` only), preflight asset check for `tests/verify-setup.sh`, derived `TARGET_USER`/`FNM_DIR` moved before the verify-only branch, `run_smoke_verification` function, final stage (5), `Bootstrap complete` after it.
+- [x] Task 5: `.gitattributes` gets `tests/*.sh text eol=lf`. README gets a step 5 and the `./setup.sh --verify` sentence (AC: 1)
+- [x] Task 6: Green phase + mutation checks (AC: 1, 2)
+  - [x] All four validators pass under Windows PowerShell (commands in Testing Requirements).
+  - [x] Mutation checks on temp copies (each must go red, then discard):
     - (a) `verify-setup.sh` always exits 0 → N.
     - (b) verify stops at the first failure (`exit 1` inside `fail`) → N failure count.
     - (c) `setup.sh` ignores a non-zero verification exit → N/L.
@@ -55,7 +59,17 @@ Concrete interpretation (binding for this story; decisions confirmed by Jonas 20
     - (h) a GPG miss turned into a FAIL → A (no fixture key is imported).
     - (i) `verify-setup.sh` saved with CRLF → static.
     - (j) README without `./setup.sh --verify` → readme validator.
-- [ ] Task 7: Scope guard — `git status` shows only the files in the File Structure table.
+- [x] Task 7: Scope guard — `git status` shows only the files in the File Structure table.
+
+### Review Findings
+
+- [x] [Review][Patch] Read-only forbid guard misses `set -euo pipefail` (`\bset -e\b` has no match before `u`) [tests/validate-setup.ps1:143]
+- [x] [Review][Patch] `gpg --list-keys` creates `~/.gnupg` when missing, breaking the read-only guarantee [tests/verify-setup.sh:50]
+- [x] [Review][Patch] Fixture copy of `verify-setup.sh` swallows failures (`2>/dev/null || true`) [tests/validate-setup.ps1:196]
+- [x] [Review][Patch] Misleading comment: `TARGET_USER` is not passed to verification, only `FNM_DIR` is [setup.sh:73]
+- [x] [Review][Defer] Neovim check has no timeout and may write state files [tests/verify-setup.sh:87] — deferred, `init.lua` is plugin-free today
+- [x] [Review][Defer] Empty SSH key file passes; `$ZDOTDIR` ignored for `.zshrc` [tests/verify-setup.sh:42] — deferred, low-impact hardening
+- [x] [Review][Defer] Hardcoded command list duplicates the manifest; forbid scan masks quoted `pass`/`fail`/`warn`/`echo` text [tests/verify-setup.sh:30] — deferred, documented trade-off
 
 ## Dev Notes
 
@@ -383,12 +397,63 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\validate-wsl-test-ca.p
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+AI assistant (Copilot SDK in VS Code), bmad-dev-story workflow
 
 ### Debug Log References
+
+- Red phase `tests/validate-setup.ps1` (current tree, before implementation): red on all 5 new `setup.sh` static checks, `verify-setup.sh` missing and `bash -n`, A (no `Verification passed`, no GPG WARN, no `pacman -Q` per manifest entry), B (`Verification passed`), M (full bootstrap ran, mutated state), N (all expected `ERROR: [stage]` lines, count, read-only), P, Q, R (exit 127), K (`Verification passed`), L (exit 0, no `ERROR: [stateful] Found`, `Bootstrap complete` printed). B's "chsh ran once" was already green, which confirms the new `/etc/passwd`-editing chsh shim.
+- Red phase `tests/validate-readme.ps1`: `documented verify-only command`, `smoke verification bootstrap step`.
+- Instance probe: `nvim --headless -i NONE -c 'lua io.stdout:write(vim.env.MYVIMRC or "")' -c 'qa!'` prints exactly `~/.config/nvim/init.lua` with exit 0. With an `error("boom")` init.lua the E5113 text is added to the output, so the check fails. Nvim writes only `~/.local/state/nvim/nvim.log` (no shada). `io.stdout:write` is used, which the story allows as the fallback.
+- Green: `validate-setup.ps1` passed on the first full run. Final regression: setup, dotfiles, readme and wsl-test-ca validators all passed (Windows PowerShell, sequential). `wsl -l -q` before and after shows only `archlinux` (untouched); `config-v2-test` was removed.
+- Mutation checks, each run end-to-end on a temporary mutation of the working tree with originals restored byte-for-byte; every one went red:
+  - (a) verify always exits 0 → `[N] setup.sh --verify exited 0 on a broken machine`, plus L.
+  - (b) `exit 1` in `fail` → `[N] … at least 7 failed checks (stopped early?)` and missing later stage lines.
+  - (c) `setup.sh` ignores non-zero verification (the `exit 1` in `run_smoke_verification` removed) → `[N] … exited 0`, `[L] … reported 'Bootstrap complete'`. A first attempt (`… || true; then`) was an invalid mutation: it bound to the `if !` condition and made verification always fail. It was redone.
+  - (d) call moved before `chezmoi init --apply` → static order check, A/K exit 1, `[L] dotfiles were not applied before verification ran`.
+  - (e) `chezmoi apply --force` in verify → static `read-only but contains chezmoi mutation`, `[N] verification restored ~/.config/nvim/init.lua`.
+  - (f) login shell check removed → static `missing 'getent passwd'`, `[N] … Login shell for tester is bash`.
+  - (g) orphan `.pub` passes → `[L] setup.sh exited 0 …`, no `ERROR: [stateful] Found`.
+  - (h) GPG miss is a FAIL → A and K exit 1.
+  - (i) CRLF → static `contains CR characters`, `bash -n` failure.
+  - (j) README without `./setup.sh --verify` → `Missing README requirement: documented verify-only command`.
 
 ### Completion Notes List
 
 - Ultimate context engine analysis completed - comprehensive developer guide created.
+- `tests/verify-setup.sh` (new) follows the binding skeleton and check catalog:
+  - read-only; uses `set -uo pipefail` without `set -e`
+  - stages `[packages] [stateful] [dotfiles] [shell] [editor]`
+  - every failure prints `ERROR: [stage] <what>. <fix>`; all checks run, with a final passed/failed summary
+  - a missing GPG key is WARN only
+  - exits 2 with a `./setup.sh --verify` hint when run directly without the `setup.sh` values
+  - `chezmoi managed --path-style absolute` worked on the instance chezmoi, so no fallback was needed
+- `setup.sh`:
+  - `--verify` parsing before the root check (`Usage: ./setup.sh [--verify]`)
+  - preflight asset check for `tests/verify-setup.sh`
+  - `TARGET_USER`/`FNM_DIR` moved before the verify-only branch
+  - `run_smoke_verification` (`env SSH_KEY_FILE GPG_FINGERPRINT FNM_DIR bash <path>`) as stage (5) after `chezmoi init --apply`; `INFO: Bootstrap complete.` only after it passes
+  - `--verify` runs the full preflight, then verification only, and prints `Verification complete; nothing was changed.`
+- `tests/validate-setup.ps1`:
+  - neovim added to the instance; faked toolchain (`/opt/config-v2-fake-tools`)
+  - pacman shim with a `-Q` db; chsh shim that really edits `/etc/passwd` (mode 0666 in the disposable instance only)
+  - fixture copies `tests/verify-setup.sh`; `Invoke-Setup -arguments`
+  - new static checks for both scripts
+  - scenarios A/B/K/L extended (L now expects a non-zero exit), M/N/P/Q/R added; order A, B, M, N, C–G, P, Q, R, K, L, H–J
+- Decision: the read-only forbid list for `verify-setup.sh` scans commands only. Comment lines and the double-quoted message of `pass`/`fail`/`warn`/`echo` are stripped first. Without this, the catalog's own fix hints (`sudo pacman -S --needed <pkg>`, `sudo chsh -s …`) would trip the `sudo`/`pacman -S`/`chsh` forbids. Mutation (e) confirms a real command is still caught.
+- README: step 5 and the `./setup.sh --verify` sentence only (step 4, Architecture Overview and Path Ownership untouched). `validate-readme.ps1` requires both. `.gitattributes` adds `tests/*.sh text eol=lf`.
+- Scope guard: `git status` shows only the files below. `dotfiles/**`, `packages/arch.txt`, `tests/lib/WslTestInstance.ps1`, `tests/validate-dotfiles.ps1` and `tests/validate-wsl-test-ca.ps1` are unchanged.
 
 ### File List
+
+- `tests/verify-setup.sh` (new)
+- `setup.sh` (modified)
+- `tests/validate-setup.ps1` (modified)
+- `tests/validate-readme.ps1` (modified)
+- `README.md` (modified)
+- `.gitattributes` (modified)
+- `_bmad-output/implementation-artifacts/2-4-add-smoke-verification-for-integrated-bootstrap.md` (modified: status/record)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified: status)
+
+## Change Log
+
+- 2026-11-06: Added the repo-local smoke verification stage. Added `tests/verify-setup.sh`, `setup.sh` stage (5) and `--verify`, validator scenarios M/N/P/Q/R, and the README step 5 and `--verify` docs. Status → review.

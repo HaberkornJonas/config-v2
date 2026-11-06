@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-05T10:48:25+02:00
-last_updated: 2026-11-05T08:30:00+01:00
+last_updated: 2026-11-06T10:50:00+01:00
 project: config-v2
 project_key: NOKEY
 tracking_system: file-system
@@ -63,7 +63,7 @@ development_status:
   2-2-apply-local-dotfiles-from-setup-sh: done
   2-6-narrow-the-bootstrap-to-arch-linux-only: done  # added by correct-course 2026-10-29
   2-3-preserve-stateful-asset-safety-in-the-integrated-flow: done
-  2-4-add-smoke-verification-for-integrated-bootstrap: ready-for-dev
+  2-4-add-smoke-verification-for-integrated-bootstrap: done
   2-5-refresh-arch-linux-documentation-and-readme-validation: backlog
   epic-2-retrospective: optional
 

@@ -7,6 +7,13 @@ SAVEHIST=50000
 setopt share_history hist_ignore_dups
 export EDITOR=nvim
 export VISUAL=nvim
+export COLORTERM=truecolor
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+
+# --- User-local binaries (uv, pipx and other per-user installers) ---
+if [ -d "$HOME/.local/bin" ] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+  export PATH="$HOME/.local/bin:$PATH"
+fi
 
 # --- zinit bootstrap (zdharma-continuum) ---
 ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
@@ -17,6 +24,9 @@ source "${ZINIT_HOME}/zinit.zsh"
 # --- Completion and plugins: fzf-tab after compinit, before widget-wrapping plugins ---
 autoload -Uz compinit && compinit
 zinit light Aloxaf/fzf-tab
+# Oh My Zsh git aliases (gst, gco, gp, ...) without the full framework.
+zinit snippet OMZL::git.zsh
+zinit snippet OMZP::git
 zinit light zsh-users/zsh-autosuggestions
 zinit light zdharma-continuum/fast-syntax-highlighting
 

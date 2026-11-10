@@ -23,6 +23,14 @@ chmod +x ./setup.sh
 
 `setup.sh` reads `packages/arch.txt` and `dotfiles/` from the same checkout. Running the script from the cloned repository is the supported bootstrap path. If a repo-local asset is missing, `setup.sh` exits with an actionable error before it changes anything. Run it as a normal user that has `sudo`; it refuses to run as root.
 
+The starship prompt uses Nerd Font glyphs. `packages/arch.txt` installs Monaspace Nerd Font (`otf-monaspace-nerd`) for terminals that run inside Arch Linux, such as on a VM desktop. On WSL the terminal window is drawn by Windows, so install a Nerd Font on Windows too and select it in your terminal profile.
+
+### Installing the Nerd Font on Windows (WSL only)
+
+1. Download `Monaspace.zip` from the latest [Nerd Fonts release](https://github.com/ryanoasis/nerd-fonts/releases), extract it, select the `MonaspiceNe*.otf` files, then right-click and choose **Install**. With Scoop instead: `scoop bucket add nerd-fonts` then `scoop install Monaspace-NF`.
+2. In Windows Terminal, open **Settings > Profiles**, pick your Arch profile (or **Defaults**), and under **Appearance** set **Font face** to `MonaspiceNe Nerd Font`. For the VS Code terminal, set `"terminal.integrated.fontFamily": "MonaspiceNe Nerd Font"`.
+3. Open a new tab: the prompt shows the Arch logo, git branch icon and powerline arrows. Empty boxes or question marks mean the terminal is not using a Nerd Font yet.
+
 ### What the Linux bootstrap does
 
 The Linux entry point is `setup.sh` in your local checkout. The script then:

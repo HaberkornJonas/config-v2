@@ -4,7 +4,7 @@
 
 ## Linux Quick Start
 
-Install Git manually first, then clone this repository and run the Linux bootstrap from the local checkout:
+On WSL, start with [Preparing a fresh Arch WSL instance](#preparing-a-fresh-arch-wsl-instance), which ends here. On another Arch machine, install Git manually first, then clone this repository and run the Linux bootstrap from the local checkout:
 
 ```bash
 # Arch
@@ -22,6 +22,46 @@ chmod +x ./setup.sh
 `setup.sh` carries its bootstrap configuration inline. If you need different values in your own copy or fork, update the configuration block at the top of `setup.sh` before you run that variant.
 
 `setup.sh` reads `packages/arch.txt` and `dotfiles/` from the same checkout. Running the script from the cloned repository is the supported bootstrap path. If a repo-local asset is missing, `setup.sh` exits with an actionable error before it changes anything. Run it as a normal user that has `sudo`; it refuses to run as root.
+
+### Preparing a fresh Arch WSL instance
+
+A new WSL Arch image only has `root`, and `setup.sh` refuses to run as root, so create a sudo user first.
+
+1. In Windows PowerShell, install the instance (add `--name <name>` for a custom instance name):
+
+   ```powershell
+   wsl --update
+   wsl --install archlinux
+   ```
+
+2. In Arch, as `root`, initialize pacman and install the basics:
+
+   ```bash
+   pacman-key --init
+   pacman-key --populate archlinux
+   pacman -Syu
+   pacman -S --needed sudo git
+   ```
+
+3. Create your user (replace `<user>`), give the `wheel` group sudo rights, and make the user the default WSL login:
+
+   ```bash
+   useradd -m -G wheel -s /bin/bash <user>
+   passwd <user>
+   echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
+   chmod 440 /etc/sudoers.d/wheel
+   printf '[user]\ndefault=<user>\n' >> /etc/wsl.conf
+   exit
+   ```
+
+4. Restart the instance from PowerShell, and confirm that `whoami` prints your user:
+
+   ```powershell
+   wsl --terminate archlinux
+   wsl -d archlinux
+   ```
+
+5. Clone the repository and run `./setup.sh` as shown in [Linux Quick Start](#linux-quick-start). When it finishes, restart the instance again (step 4) so zsh becomes your login shell, then install the Nerd Font on Windows (below).
 
 The starship prompt uses Nerd Font glyphs. `packages/arch.txt` installs Monaspace Nerd Font (`otf-monaspace-nerd`) for terminals that run inside Arch Linux, such as on a VM desktop. On WSL the terminal window is drawn by Windows, so install a Nerd Font on Windows too and select it in your terminal profile.
 

@@ -4,7 +4,7 @@ baseline_commit: bf8468e4a634e8da86ad1bde53228b03f0cf4bd3
 
 # Story 2.5: Refresh Arch Linux Documentation and README Validation
 
-Status: review
+Status: done
 
 > **Sequencing:** last story of Epic 2. It builds on Stories 2.1 to 2.4 and 2.6 (all done). Those stories deliberately left README wording alone; this story owns the full README rewrite, and `tests/validate-readme.ps1` is its test. No production script changes: `setup.sh`, `tests/verify-setup.sh`, `dotfiles/**` and `packages/arch.txt` stay as they are.
 
@@ -54,6 +54,21 @@ Concrete interpretation (binding for this story):
   - (g) add `setup.ps1` or a `## Windows Companion Bootstrap` heading → existing forbid.
   - (h) remove the `## Public-Safe Rules` section → required check.
 - [x] Task 5: Scope guard — `git status` shows only the files in the File Structure table.
+
+### Review Findings
+
+- [x] [Review][Patch] `setup.ps1` forbid weakened: the `(?<![\w-])` lookbehind exempts any prefixed name (`win-setup.ps1`), not just `validate-setup.ps1` [tests/validate-readme.ps1:122]
+- [x] [Review][Patch] Update flow has no recovery for a changed `dotfiles/.chezmoi.toml.tmpl`; running `chezmoi init` by hand renders the template's test identity into `~/.gitconfig` [README.md:46]
+- [x] [Review][Patch] `## Validation` omits `validate-wsl-test-ca.ps1`, which also uses `config-v2-test` [README.md:101]
+- [x] [Review][Patch] Public-Safe Rules does not name the SSH key as `$SSH_KEY_FILE` (AC2a) [README.md:86]
+- [x] [Review][Patch] Section-check failure message prints a raw regex instead of the spec message style [tests/validate-readme.ps1:107]
+- [x] [Review][Patch] Stage tags and `ERROR: [<stage>]` are matched anywhere in the README, not inside `## Verification` [tests/validate-readme.ps1:66]
+- [x] [Review][Patch] Stale-wording forbids miss "dotfiles repository", "two repositories" and line-wrapped phrases [tests/validate-readme.ps1:124]
+- [x] [Review][Patch] An empty README makes the validator throw on `$null` instead of reporting a failure [tests/validate-readme.ps1:20]
+- [x] [Review][Patch] `GIT_USER_NAME` is not blocked although the README says no configuration value is repeated [tests/validate-readme.ps1:177]
+- [x] [Review][Patch] Verification section omits the final `ERROR: Verification failed: <k> of <n> checks failed` summary line [README.md:57]
+- [x] [Review][Patch] `## Architecture Overview` is no longer guarded after the two-repo check was removed [tests/validate-readme.ps1:48]
+- [x] [Review][Defer] Path Ownership row shows the literal default `~/.ssh/id_rsa`; the blocked-value check only compares the `${HOME}/…` form [README.md:74] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -243,3 +258,4 @@ AI assistant (Copilot SDK in VS Code), dev-story workflow
 
 - 2026-11-06: Story created (ready-for-dev).
 - 2026-11-06: README rewritten for the in-repo, Arch-only model and `validate-readme.ps1` assertions replaced. Status → review.
+- 2026-11-09: Code review: 11 patches applied (README and validate-readme.ps1), 1 deferred to deferred-work.md. Status → done.

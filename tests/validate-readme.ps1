@@ -17,8 +17,14 @@ if (-not (Test-Path -LiteralPath $setupPath)) {
 $readmeContent = ''
 $setupContent = ''
 if ($failures.Count -eq 0) {
+    # Get-Content -Raw returns $null for an empty file; normalize so string methods below cannot throw.
     $readmeContent = Get-Content -LiteralPath $readmePath -Raw
+    if ($null -eq $readmeContent) { $readmeContent = '' }
     $setupContent = Get-Content -LiteralPath $setupPath -Raw
+    if ($null -eq $setupContent) { $setupContent = '' }
+    if ([string]::IsNullOrWhiteSpace($readmeContent)) {
+        $failures.Add('README.md is empty.')
+    }
 
     $requiredChecks = @(
         @{
@@ -62,14 +68,6 @@ if ($failures.Count -eq 0) {
             Pattern = '(?is)git pull.{0,200}chezmoi apply'
         },
         @{
-            Label = 'Verification section'
-            Pattern = '(?im)^##\s+Verification\s*$'
-        },
-        @{
-            Label = 'verification failure signal'
-            Pattern = [regex]::Escape('ERROR: [<stage>]')
-        },
-        @{
             Label = 'documented verify-only command'
             Pattern = [regex]::Escape('./setup.sh --verify')
         },
@@ -85,16 +83,31 @@ if ($failures.Count -eq 0) {
         }
     }
 
+    # Section-body checks: the section must exist and its body (up to the next ## heading) must mention each topic.
+    $verificationTopics = @(
+        @{ Label = 'verification failure signal'; Pattern = [regex]::Escape('ERROR: [<stage>]') },
+        @{ Label = 'verification summary line'; Pattern = [regex]::Escape('ERROR: Verification failed:') }
+    )
     foreach ($stageTag in '[packages]', '[stateful]', '[dotfiles]', '[shell]', '[editor]') {
-        if (-not $readmeContent.Contains($stageTag)) {
-            $failures.Add("Missing README requirement: verification stage tag $stageTag.")
-        }
+        $verificationTopics += @{ Label = "verification stage tag $stageTag"; Pattern = [regex]::Escape($stageTag) }
     }
-
-    # Section-body checks: the section must exist and mention the required topics.
     $sectionChecks = @(
-        @{ Heading = 'Not Supported Yet'; Patterns = @('(?i)windows', '(?i)other (linux )?distro') },
-        @{ Heading = 'Public-Safe Rules'; Patterns = @('(?i)secret', '(?i)test fixture') }
+        @{ Heading = 'Verification'; Topics = $verificationTopics },
+        @{ Heading = 'Not Supported Yet'; Topics = @(
+                @{ Label = 'deferred Windows target'; Pattern = '(?i)windows' },
+                @{ Label = 'deferred other distros'; Pattern = '(?i)other (linux )?distro' }
+            )
+        },
+        @{ Heading = 'Public-Safe Rules'; Topics = @(
+                @{ Label = 'no committed secrets rule'; Pattern = '(?i)secret' },
+                @{ Label = 'test fixture rule'; Pattern = '(?i)test fixture' }
+            )
+        },
+        @{ Heading = 'Architecture Overview'; Topics = @(
+                @{ Label = 'chezmoi source tree'; Pattern = '(?i)chezmoi' },
+                @{ Label = 'in-repo dotfiles directory'; Pattern = [regex]::Escape('dotfiles/') }
+            )
+        }
     )
     foreach ($section in $sectionChecks) {
         $sectionPattern = '(?ims)^##\s+' + [regex]::Escape($section.Heading) + '\s*$(?<body>.*?)(?=^##\s|\z)'
@@ -103,9 +116,9 @@ if ($failures.Count -eq 0) {
             $failures.Add("Missing README requirement: $($section.Heading) section.")
             continue
         }
-        foreach ($pattern in $section.Patterns) {
-            if ($sectionMatch.Groups['body'].Value -notmatch $pattern) {
-                $failures.Add("README $($section.Heading) section must match $pattern.")
+        foreach ($topic in $section.Topics) {
+            if ($sectionMatch.Groups['body'].Value -notmatch $topic.Pattern) {
+                $failures.Add("Missing README requirement: $($topic.Label) in the $($section.Heading) section.")
             }
         }
     }
@@ -119,14 +132,16 @@ if ($failures.Count -eq 0) {
         @{ Label = 'Windows Companion Bootstrap section'; Pattern = '(?im)^##\s+Windows Companion Bootstrap\s*$' },
         @{ Label = 'removed Ubuntu manifest reference'; Pattern = 'packages/ubuntu\.txt' },
         @{ Label = 'removed Scoop/winget manifest reference'; Pattern = 'packages/(scoop|winget)\.txt' },
-        @{ Label = 'removed setup.ps1 command'; Pattern = '(?i)(?<![\w-])setup\.ps1' },
-        @{ Label = 'DOTFILES_REPO reference'; Pattern = 'DOTFILES_REPO' },
-        @{ Label = 'separate dotfiles repository reference'; Pattern = '(?i)\b(separate|second|own) dotfiles repo' },
-        @{ Label = 'two-repo model reference'; Pattern = '(?i)two-repo' },
-        @{ Label = 'dotfiles repo reference'; Pattern = '(?i)\bdotfiles repo\b' }
+        @{ Label = 'removed setup.ps1 command'; Pattern = '(?i)setup\.ps1' },
+        @{ Label = 'DOTFILES_REPO reference'; Pattern = '(?i)DOTFILES_REPO' },
+        @{ Label = 'separate dotfiles repository reference'; Pattern = '(?i)\b(separate|second|own)\s+dotfiles\s+repo' },
+        @{ Label = 'two-repo model reference'; Pattern = '(?i)\btwo[\s-]+repo' },
+        @{ Label = 'dotfiles repo reference'; Pattern = '(?i)\bdotfiles\s+repo(s|sitory|sitories)?\b' }
     )
+    # Validator file names are the only allowed setup.ps1 mentions; strip them before the forbid scan.
+    $forbidScanContent = $readmeContent -replace '(?i)(?<![\w-])validate-setup\.ps1', ''
     foreach ($check in $forbiddenReadmeChecks) {
-        if ($readmeContent -match $check.Pattern) {
+        if ($forbidScanContent -match $check.Pattern) {
             $failures.Add("README still contains a $($check.Label).")
         }
     }
@@ -175,6 +190,7 @@ if ($failures.Count -eq 0) {
     }
 
     $setupValuesToBlock = @{
+        'GIT_USER_NAME' = $null
         'GIT_USER_EMAIL' = $null
         'GPG_FINGERPRINT' = $null
         'SSH_KEY_FILE' = $null

@@ -47,9 +47,11 @@ chezmoi apply
 
 `chezmoi init` stored the checkout's `dotfiles/` directory as the chezmoi source, so a plain `chezmoi apply` needs no flags. Rerun `./setup.sh` instead when you also want the package, stateful-asset and verification stages to run again. If you move the checkout, rerun `./setup.sh` from the new location so the stored source path is regenerated.
 
+If `chezmoi apply` warns that the config file template has changed, rerun `./setup.sh` rather than running `chezmoi init` yourself: `setup.sh` passes the identity values from its configuration block to `chezmoi init`, and a bare `chezmoi init` falls back to the template's test identity.
+
 ## Verification
 
-Verification is the last stage of `./setup.sh` and can also run on its own with `./setup.sh --verify`. It only reads the machine: it never installs, applies, generates or deletes anything. It runs every check, so one run lists all broken parts. Each failure prints `ERROR: [<stage>] <what is wrong>. <how to fix>`, and the run exits non-zero. `Bootstrap complete.` is printed only after verification passes.
+Verification is the last stage of `./setup.sh` and can also run on its own with `./setup.sh --verify`. It only reads the machine: it never installs, applies, generates or deletes anything. It runs every check, so one run lists all broken parts. Each failure prints `ERROR: [<stage>] <what is wrong>. <how to fix>`, the run ends with `ERROR: Verification failed: <k> of <n> checks failed (stages: ...)`, and it exits non-zero. `Bootstrap complete.` is printed only after verification passes.
 
 | Stage | What is checked |
 | --- | --- |
@@ -87,7 +89,7 @@ This repository is public and is also the test fixture for repeated end-to-end b
 
 - no secret is committed: no private keys, passwords, tokens or machine-unique credentials
 - personal values in `dotfiles/` are templated or come from the configuration block at the top of `setup.sh`, which holds only public-safe values (identity, GPG fingerprint, SSH key path)
-- the SSH private key and GPG private keys stay on the machine; chezmoi never manages them (see Path Ownership)
+- the SSH private key (`$SSH_KEY_FILE`) and GPG private keys stay on the machine; chezmoi never manages them (see Path Ownership)
 - this README does not repeat the configuration values from `setup.sh`
 
 ## Not Supported Yet
@@ -112,10 +114,11 @@ Only the Arch Linux path is shipped and tested. These targets are deferred:
 
 ## Validation
 
-Maintainers run the validators from Windows PowerShell. The setup and dotfiles validators create a disposable WSL Arch test instance named `config-v2-test`; run them one at a time.
+Maintainers run the validators from Windows PowerShell. The setup and dotfiles validators create a disposable WSL Arch test instance named `config-v2-test`, so run them one at a time; the README and WSL test-CA validators only read files.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\validate-readme.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\validate-setup.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\validate-dotfiles.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\validate-wsl-test-ca.ps1
 ```

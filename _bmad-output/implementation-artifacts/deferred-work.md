@@ -26,3 +26,7 @@
 - tests/verify-setup.sh: the Neovim headless check has no timeout and may write state files (undo/log dirs); acceptable while init.lua is plugin-free.
 - tests/verify-setup.sh: an empty SSH key file passes the presence check, and ZDOTDIR is ignored when locating ~/.zshrc.
 - tests/verify-setup.sh: the command-on-PATH list duplicates packages/arch.txt, and the validator's forbid scan masks quoted pass/fail/warn/echo text (documented trade-off).
+
+## Deferred from: code review of 2-5-refresh-arch-linux-documentation-and-readme-validation (2026-11-09)
+
+- README.md Path Ownership: the `$SSH_KEY_FILE` row shows the literal default `~/.ssh/id_rsa`, and validate-readme.ps1 only blocks the `${HOME}/.ssh/id_rsa` form of SSH_KEY_FILE (pre-existing from Story 2.3; the section is frozen).

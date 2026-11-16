@@ -1,0 +1,3 @@
+# Managed by chezmoi from config-v2/dotfiles. Local edits are overwritten on apply.
+# bash login shells read this instead of ~/.profile; delegate to ~/.bashrc (which loads the shared env).
+[ -r "$HOME/.bashrc" ] && . "$HOME/.bashrc"

@@ -17,6 +17,10 @@ $failures = New-Object System.Collections.Generic.List[string]
 $requiredSourceFiles = @(
     '.chezmoi.toml.tmpl',
     'dot_zshrc',
+    'dot_bashrc',
+    'dot_bash_profile',
+    'dot_profile',
+    'dot_config/shell/env.sh',
     'dot_gitconfig.tmpl',
     'dot_config/starship.toml',
     'dot_config/nvim/init.lua',
@@ -25,6 +29,10 @@ $requiredSourceFiles = @(
 
 $managedTargets = @(
     '.zshrc',
+    '.bashrc',
+    '.bash_profile',
+    '.profile',
+    '.config/shell/env.sh',
     '.gitconfig',
     '.config/starship.toml',
     '.config/nvim/init.lua',
@@ -209,7 +217,8 @@ if (Test-Path -LiteralPath $configTemplatePath -PathType Leaf) {
                         @{ Label = 'fast-syntax-highlighting plugin'; Pattern = 'zinit light zdharma-continuum/fast-syntax-highlighting' },
                         @{ Label = 'zoxide integration'; Pattern = 'zoxide init zsh' },
                         @{ Label = 'starship integration'; Pattern = 'starship init zsh' },
-                        @{ Label = 'fnm integration'; Pattern = 'fnm env' }
+                        @{ Label = 'fnm integration'; Pattern = 'fnm env' },
+                        @{ Label = 'shared env.sh'; Pattern = '\.config/shell/env\.sh' }
                     )
                     foreach ($check in $zshrcChecks) {
                         if ($zshrc -notmatch $check.Pattern) {
@@ -238,6 +247,30 @@ if (Test-Path -LiteralPath $configTemplatePath -PathType Leaf) {
                 $verify = Invoke-ConfigV2TestInstance ((Get-SandboxPrelude $scenario) + "`ncz verify --exclude scripts")
                 if ($verify.ExitCode -ne 0) {
                     $failures.Add("[$scenario] chezmoi verify reports drift after apply (exit $($verify.ExitCode)); apply is not idempotent. $($verify.Output)")
+                }
+
+                # Agents run /bin/bash (often non-interactive) or sh: in a clean environment, each must
+                # get ~/.local/bin, fnm and the fnm default Node from the shared env.sh, once.
+                $agentShellScript = @(
+                    (Get-SandboxPrelude $scenario),
+                    'home="$sandbox/home"',
+                    'for f in .bashrc .bash_profile .profile .config/shell/env.sh; do bash -n "$home/$f" || { echo "bash -n failed: $f"; exit 20; }; done',
+                    'sh -n "$home/.config/shell/env.sh" || { echo "sh -n failed: env.sh"; exit 21; }',
+                    'fnm="$home/.local/share/fnm"',
+                    'mkdir -p "$home/.local/bin" "$fnm/node-versions/v0/installation/bin" "$fnm/aliases"',
+                    'printf "#!/bin/sh\n" > "$fnm/fnm"; cp "$fnm/fnm" "$fnm/node-versions/v0/installation/bin/node"',
+                    'chmod +x "$fnm/fnm" "$fnm/node-versions/v0/installation/bin/node"',
+                    'ln -sfn "$fnm/node-versions/v0/installation" "$fnm/aliases/default"',
+                    'probe=''n="$(command -v node)"; f="$(command -v fnm)"; . "$HOME/.config/shell/env.sh"; printf "%s|%s|%s|%s|%s\n" "$n" "$f" "$EDITOR" "$(printf %s "$PATH" | tr : "\n" | grep -c "^$HOME/.local/bin$")" "$DOTNET_CLI_TELEMETRY_OPTOUT"''',
+                    'expected="$fnm/aliases/default/bin/node|$fnm/fnm|nvim|1|1"',
+                    'for shell in "bash -lc" "bash -ic" "sh -lc"; do',
+                    '  got="$(env -i HOME="$home" TERM=dumb PATH=/usr/local/bin:/usr/bin $shell "$probe" 2>/dev/null | tail -n 1)"',
+                    '  [ "$got" = "$expected" ] || { echo "$shell: got [$got], expected [$expected]"; exit 22; }',
+                    'done'
+                ) -join "`n"
+                $agentShell = Invoke-ConfigV2TestInstance $agentShellScript
+                if ($agentShell.ExitCode -ne 0) {
+                    $failures.Add("[$scenario] bash/sh do not get the shared environment from ~/.config/shell/env.sh (exit $($agentShell.ExitCode)): $($agentShell.Output)")
                 }
             }
 

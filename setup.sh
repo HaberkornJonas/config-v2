@@ -70,7 +70,7 @@ require_repo_asset_path "tests/verify-setup.sh" >/dev/null
 
 # Derived values (not configuration, AD-8). FNM_DIR is passed to verification, so it must be set before the verify-only branch.
 TARGET_USER="$(id -un)"
-# Must match the fnm path in dotfiles/dot_zshrc.
+# Must match the fnm path in dotfiles/dot_config/shell/env.sh.
 FNM_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fnm"
 
 if [[ "$VERIFY_ONLY" == true ]]; then

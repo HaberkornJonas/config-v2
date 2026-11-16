@@ -14,7 +14,7 @@ $verifyPath = Join-Path $repoRoot 'tests/verify-setup.sh'
 $failures = New-Object System.Collections.Generic.List[string]
 
 $identityKeys = @('GIT_USER_NAME', 'GIT_USER_EMAIL', 'GPG_FINGERPRINT')
-$managedTargets = @('.zshrc', '.gitconfig', '.config/starship.toml', '.config/nvim/init.lua', '.config/tmux/tmux.conf')
+$managedTargets = @('.zshrc', '.bashrc', '.bash_profile', '.profile', '.config/shell/env.sh', '.gitconfig', '.config/starship.toml', '.config/nvim/init.lua', '.config/tmux/tmux.conf')
 
 $testUser = 'tester'
 $testHome = "/home/$testUser"
@@ -350,7 +350,7 @@ if ($setupContent) {
     try {
         $instanceReady = $false
         try {
-            New-ConfigV2TestInstance @('chezmoi', 'git', 'openssh', 'zsh', 'neovim')
+            New-ConfigV2TestInstance @('chezmoi', 'git', 'openssh', 'zsh', 'neovim', 'which')
             $setup = Invoke-Instance $shimSetup
             if ($setup.ExitCode -ne 0) { throw "Shim setup failed: $($setup.Output)" }
             $instanceReady = $true

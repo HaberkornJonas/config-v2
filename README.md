@@ -79,7 +79,9 @@ The Linux entry point is `setup.sh` in your local checkout. The script then:
 2. checks that the host is Arch Linux and installs packages from `packages/arch.txt` in this repository
 3. prepares stateful assets (fnm, zsh as login shell, SSH key) without overwriting any that already exist
 4. runs `chezmoi init --apply` to apply the managed configuration from `dotfiles/` in this checkout
-5. runs the smoke verification in `tests/verify-setup.sh` (packages, stateful assets, managed dotfiles, zsh and Neovim entrypoints) and exits non-zero with an `ERROR: [stage]` line for each broken part
+5. runs the smoke verification in `tests/verify-setup.sh` (packages, stateful assets, managed dotfiles, zsh, bash and Neovim entrypoints) and exits non-zero with an `ERROR: [stage]` line for each broken part
+
+zsh is your interactive shell, but agents and scripts usually run `/bin/bash`, often non-interactively. PATH entries (`~/.local/bin`, fnm and its default Node version) and exports therefore live in `~/.config/shell/env.sh`, which `~/.zshrc`, `~/.bashrc` and `~/.profile` all load. Keep interactive-only extras (plugins, prompt, aliases) in `~/.zshrc`. Node is available in bash once fnm has a default version (`fnm install --lts`; the first install becomes the default). A bare `bash -c` reads no startup files and only inherits its parent's environment.
 
 Run `./setup.sh --verify` at any time to re-check an existing machine without changing anything.
 
@@ -106,7 +108,7 @@ Verification is the last stage of `./setup.sh` and can also run on its own with 
 | `[packages]` | every entry of `packages/arch.txt` is installed, and the key commands are on `PATH` |
 | `[stateful]` | fnm is installed, the SSH key exists (a `.pub` file without its private key fails), the login shell is zsh |
 | `[dotfiles]` | the chezmoi source is this checkout's `dotfiles/`, `chezmoi verify` reports no drift, every managed file exists |
-| `[shell]` | `~/.zshrc` exists and parses |
+| `[shell]` | `~/.zshrc` parses; `~/.bashrc`, `~/.bash_profile`, `~/.profile` and `~/.config/shell/env.sh` parse; a clean-environment `bash -lc` and `bash -ic` (what agents use) find `which`, `fnm` and, once fnm has a default version, `node`/`npm`/`npx` |
 | `[editor]` | Neovim loads the managed `init.lua` |
 
 A configured GPG key that is missing from your keyring is only a warning: importing the key stays a manual step. These are presence and parse checks, not a full test of every tool.
@@ -118,6 +120,10 @@ Every path the bootstrap touches has exactly one owner: chezmoi rewrites managed
 | Path | Category | Rule |
 | --- | --- | --- |
 | `~/.zshrc` | chezmoi-managed | Rewritten from `dotfiles/dot_zshrc` on every apply |
+| `~/.config/shell/env.sh` | chezmoi-managed | Rewritten from `dotfiles/dot_config/shell/env.sh`; shared PATH and exports sourced by zsh, bash and sh |
+| `~/.bashrc` | chezmoi-managed | Rewritten from `dotfiles/dot_bashrc`; loads `env.sh` so agents using `/bin/bash` get the same tools as zsh |
+| `~/.bash_profile` | chezmoi-managed | Rewritten from `dotfiles/dot_bash_profile`; bash login shells delegate to `~/.bashrc` |
+| `~/.profile` | chezmoi-managed | Rewritten from `dotfiles/dot_profile`; POSIX `sh` login shells load `env.sh` |
 | `~/.gitconfig` | chezmoi-managed | Rendered from `dotfiles/dot_gitconfig.tmpl` with the identity values in `setup.sh` |
 | `~/.config/starship.toml` | chezmoi-managed | Rewritten from `dotfiles/dot_config/starship.toml` |
 | `~/.config/nvim/init.lua` | chezmoi-managed | Rewritten from `dotfiles/dot_config/nvim/init.lua` |

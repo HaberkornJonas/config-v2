@@ -1,0 +1,14 @@
+# Managed by chezmoi from config-v2/dotfiles. Local edits are overwritten on apply.
+# bash is not the login shell (zsh is); this file exists so agents and scripts using /bin/bash
+# see the same PATH and tools. Interactive extras stay in ~/.zshrc.
+
+# Shared environment first, before the interactive guard, so `bash -ic`, `bash -lc` and
+# login shells all get it.
+[ -r "$HOME/.config/shell/env.sh" ] && . "$HOME/.config/shell/env.sh"
+
+# --- Interactive only below ---
+[[ $- != *i* ]] && return
+
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+PS1='[\u@\h \W]\$ '

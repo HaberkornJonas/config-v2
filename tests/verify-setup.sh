@@ -84,6 +84,30 @@ else
   fail shell "~/.zshrc is missing or has a zsh syntax error: ${zsh_error%%$'\n'*}. Rerun ./setup.sh to restore the managed version."
 fi
 
+# [shell] bash entrypoints parse and give agents (/bin/bash, often non-interactive) the same tools as zsh
+for rc in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile" "${XDG_CONFIG_HOME:-$HOME/.config}/shell/env.sh"; do
+  if [[ -f "$rc" ]] && bash_error="$(bash -n "$rc" 2>&1)"; then pass shell "$rc parses"
+  else
+    [[ -f "$rc" ]] || bash_error="file not found"
+    fail shell "$rc is missing or has a bash syntax error: ${bash_error%%$'\n'*}. Rerun ./setup.sh to restore the managed version."
+  fi
+done
+
+# Clean environment, like an agent spawning bash: only what the startup files provide counts.
+agent_bash() {
+  env -i HOME="$HOME" USER="$user" LOGNAME="$user" TERM=dumb PATH=/usr/local/bin:/usr/bin \
+    ${XDG_DATA_HOME:+XDG_DATA_HOME="$XDG_DATA_HOME"} bash "$1" "$2" 2>/dev/null
+}
+agent_cmds=(which fnm)
+if [[ -e "$FNM_DIR/aliases/default" ]]; then agent_cmds+=(node npm npx)
+else warn shell "fnm has no default Node version, so node/npm/npx are unavailable outside interactive zsh. Run: fnm install --lts"; fi
+for mode in -lc -ic; do
+  for cmd in "${agent_cmds[@]}"; do
+    if agent_bash "$mode" "command -v $cmd" >/dev/null; then pass shell "bash $mode resolves $cmd"
+    else fail shell "bash $mode cannot find '$cmd'; agents using /bin/bash will miss it. Check ~/.bashrc and ~/.config/shell/env.sh, then rerun ./setup.sh."; fi
+  done
+done
+
 # [editor] Neovim loads the managed init.lua without errors (-i NONE: no shada write)
 expected_vimrc="${XDG_CONFIG_HOME:-$HOME/.config}/nvim/init.lua"
 if nvim_out="$(nvim --headless -i NONE -c 'lua io.stdout:write(vim.env.MYVIMRC or "")' -c 'qa!' 2>&1)" && [[ "$nvim_out" == "$expected_vimrc" ]]; then

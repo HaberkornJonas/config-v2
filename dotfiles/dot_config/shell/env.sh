@@ -12,6 +12,16 @@ _config_v2_path_prepend() {
   fi
 }
 
+# Homebrew on Apple silicon macOS (what `brew shellenv` sets, without spawning brew).
+# Prepended first so that user-local binaries and fnm below take precedence over it.
+if [ -x /opt/homebrew/bin/brew ]; then
+  export HOMEBREW_PREFIX=/opt/homebrew
+  export HOMEBREW_CELLAR=/opt/homebrew/Cellar
+  export HOMEBREW_REPOSITORY=/opt/homebrew
+  _config_v2_path_prepend /opt/homebrew/sbin
+  _config_v2_path_prepend /opt/homebrew/bin
+fi
+
 # User-local binaries (uv, pipx and other per-user installers).
 _config_v2_path_prepend "$HOME/.local/bin"
 

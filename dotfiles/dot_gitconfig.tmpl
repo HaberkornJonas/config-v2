@@ -8,6 +8,14 @@
 [tag]
 	gpgsign = true
 {{- end }}
+{{- if eq .chezmoi.os "darwin" }}
+{{- $gpg := lookPath "gpg" }}
+{{- if $gpg }}
+[gpg]
+	# GUI apps on macOS do not get the shell PATH, so pin the gpg binary found at apply time.
+	program = {{ $gpg }}
+{{- end }}
+{{- end }}
 [init]
 	defaultBranch = main
 [core]

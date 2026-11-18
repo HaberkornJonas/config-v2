@@ -60,7 +60,7 @@ if ($failures.Count -eq 0) {
             Pattern = '(?is)setup\.sh.{0,40}reads.{0,60}packages/arch\.txt.{0,20}and.{0,20}dotfiles/.{0,60}same checkout'
         },
         @{
-            Label = 'Arch Linux only statement'
+            Label = 'supported targets statement (Arch Linux and macOS)'
             Pattern = '(?is)Arch Linux \(WSL or VM\).{0,80}only supported'
         },
         @{
@@ -193,6 +193,7 @@ if ($failures.Count -eq 0) {
         'GIT_USER_NAME' = $null
         'GIT_USER_EMAIL' = $null
         'GPG_FINGERPRINT' = $null
+        'GPG_FINGERPRINT_MACOS' = $null
         'SSH_KEY_FILE' = $null
     }
 

@@ -1,0 +1,18 @@
+# macOS package manifest, installed by setup.sh through `brew bundle`.
+# Mirrors packages/arch.txt. Not listed because macOS ships them: openssh, unzip, which, zsh.
+# The .NET SDK is optional and installed separately by setup.sh (INSTALL_DOTNET_SDK).
+# Docker Desktop is installed separately (https://www.docker.com/products/docker-desktop/);
+# the docker CLI it provides is checked by verification.
+brew "btop"
+brew "chezmoi"
+brew "fzf"
+brew "git"
+brew "htop"
+brew "jq"
+brew "neovim"
+brew "starship"
+brew "tmux"
+brew "tree"
+brew "xan"
+brew "zoxide"
+cask "font-monaspice-nerd-font"

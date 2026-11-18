@@ -7,7 +7,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GIT_USER_NAME="Jonas Haberkorn"
 GIT_USER_EMAIL="jonas@haberkorn.fr"
 GPG_FINGERPRINT="CA09410D7AD0C086893352466E118DFA78A27A9F"
+GPG_FINGERPRINT_MACOS="A42825EEF0F52E39119B7BE2F19993DBC3177F7C"
 SSH_KEY_FILE="${HOME}/.ssh/id_rsa"
+# Optional .NET SDK (dotnet-sdk), off by default. Install it with: INSTALL_DOTNET_SDK=true ./setup.sh
+INSTALL_DOTNET_SDK="${INSTALL_DOTNET_SDK:-false}"
 
 # Prints the absolute path of a required repo-local asset, or exits with an actionable error (AD-3).
 require_repo_asset_path() {
@@ -33,7 +36,7 @@ fi
 # Runs the repo-local smoke verification (AD-6, AD-9 step 6). Exits non-zero with an actionable hint on failure.
 run_smoke_verification() {
   echo "INFO: Running smoke verification (tests/verify-setup.sh)."
-  if ! env SSH_KEY_FILE="$SSH_KEY_FILE" GPG_FINGERPRINT="$GPG_FINGERPRINT" FNM_DIR="$FNM_DIR" \
+  if ! env SSH_KEY_FILE="$SSH_KEY_FILE" GPG_FINGERPRINT="$GPG_FINGERPRINT" FNM_DIR="$FNM_DIR" PLATFORM="$PLATFORM" \
       bash "$(require_repo_asset_path "tests/verify-setup.sh")"; then
     echo "ERROR: Smoke verification failed. Fix the [stage] items reported above, then rerun ./setup.sh (or ./setup.sh --verify to re-check only)." >&2
     exit 1
@@ -50,23 +53,60 @@ if ! command -v sudo >/dev/null 2>&1; then
   exit 1
 fi
 
-# Read ID in a subshell so os-release fields cannot overwrite script variables (AD-7).
-# A malformed file yields an empty ID and falls through to the actionable error below.
-DISTRO=""
-if [[ -r /etc/os-release ]]; then
-  # shellcheck source=/dev/null
-  DISTRO="$(. /etc/os-release >/dev/null 2>&1; printf '%s' "${ID:-}")" || DISTRO=""
-fi
-if [[ "$DISTRO" != "arch" ]]; then
-  echo "ERROR: Unsupported distro '${DISTRO:-unknown}': only Arch Linux is supported (/etc/os-release must have ID=arch). Run ./setup.sh on an Arch Linux machine (WSL or VM)." >&2
+if [[ "$INSTALL_DOTNET_SDK" != "true" && "$INSTALL_DOTNET_SDK" != "false" ]]; then
+  echo "ERROR: INSTALL_DOTNET_SDK must be 'true' or 'false', got '$INSTALL_DOTNET_SDK'." >&2
   exit 1
+fi
+
+# Platform: macOS (Darwin) or Arch Linux. Everything else stops here.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  PLATFORM="macos"
+else
+  # Read ID in a subshell so os-release fields cannot overwrite script variables (AD-7).
+  # A malformed file yields an empty ID and falls through to the actionable error below.
+  DISTRO=""
+  if [[ -r /etc/os-release ]]; then
+    # shellcheck source=/dev/null
+    DISTRO="$(. /etc/os-release >/dev/null 2>&1; printf '%s' "${ID:-}")" || DISTRO=""
+  fi
+  if [[ "$DISTRO" != "arch" ]]; then
+    echo "ERROR: Unsupported distro '${DISTRO:-unknown}': on Linux only Arch Linux is supported (/etc/os-release must have ID=arch). Run ./setup.sh on an Arch Linux machine (WSL or VM) or on macOS." >&2
+    exit 1
+  fi
+  PLATFORM="arch"
 fi
 
 # chezmoi would git-init dotfiles/ if the checkout were not a git working tree.
 require_repo_asset_path ".git" >/dev/null
 require_repo_asset_path "dotfiles/.chezmoi.toml.tmpl" >/dev/null
-require_repo_asset_path "packages/arch.txt" >/dev/null
+if [[ "$PLATFORM" == "macos" ]]; then
+  require_repo_asset_path "packages/Brewfile" >/dev/null
+else
+  require_repo_asset_path "packages/arch.txt" >/dev/null
+fi
 require_repo_asset_path "tests/verify-setup.sh" >/dev/null
+
+if [[ "$PLATFORM" == "macos" ]]; then
+  # Homebrew is a prerequisite on macOS. A shell that has not loaded it yet may still lack it on PATH.
+  if ! command -v brew >/dev/null 2>&1 && [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  fi
+  if ! command -v brew >/dev/null 2>&1; then
+    echo "ERROR: Homebrew is required on macOS. Install it from https://brew.sh, then rerun ./setup.sh." >&2
+    exit 1
+  fi
+  # The macOS signing key differs from the Arch one; only the configuration block assigns either value.
+  [[ -n "$GPG_FINGERPRINT_MACOS" ]] && GPG_FINGERPRINT="$GPG_FINGERPRINT_MACOS"
+fi
+
+# Prints the login shell of a user: getent on Linux, Directory Services on macOS.
+login_shell_of() {
+  if [[ "$PLATFORM" == "macos" ]]; then
+    dscl . -read "/Users/$1" UserShell 2>/dev/null | awk '{print $2}'
+  else
+    getent passwd "$1" | cut -d: -f7
+  fi
+}
 
 # Derived values (not configuration, AD-8). FNM_DIR is passed to verification, so it must be set before the verify-only branch.
 TARGET_USER="$(id -un)"
@@ -79,17 +119,35 @@ if [[ "$VERIFY_ONLY" == true ]]; then
   exit 0
 fi
 
-# --- (2) Install packages via pacman; only system commands run through sudo (AD-7) ---
-echo "INFO: Detected Arch Linux — installing packages via pacman."
-sudo pacman -S --needed --noconfirm - < "$(require_repo_asset_path "packages/arch.txt")"
+# --- (2) Install packages; only system commands run through sudo (AD-7) ---
+if [[ "$PLATFORM" == "macos" ]]; then
+  # Homebrew refuses to run as root; casks that need it ask for the password themselves.
+  echo "INFO: Detected macOS — installing packages via Homebrew."
+  brew bundle install --no-upgrade --file "$(require_repo_asset_path "packages/Brewfile")"
+else
+  echo "INFO: Detected Arch Linux — installing packages via pacman."
+  sudo pacman -S --needed --noconfirm - < "$(require_repo_asset_path "packages/arch.txt")"
+fi
+
+# Optional .NET SDK, kept out of the manifests (the macOS cask needs an administrator password).
+if [[ "$INSTALL_DOTNET_SDK" == "true" ]]; then
+  echo "INFO: INSTALL_DOTNET_SDK=true — installing the .NET SDK."
+  if [[ "$PLATFORM" == "macos" ]]; then
+    brew list --cask dotnet-sdk >/dev/null 2>&1 || brew install --cask dotnet-sdk
+  else
+    sudo pacman -S --needed --noconfirm dotnet-sdk
+  fi
+else
+  echo "INFO: Skipping the optional .NET SDK (run INSTALL_DOTNET_SDK=true ./setup.sh to install it)."
+fi
 
 if ! command -v chezmoi >/dev/null 2>&1; then
-  echo "ERROR: chezmoi is not installed after the package stage. Check packages/arch.txt and the pacman output." >&2
+  echo "ERROR: chezmoi is not installed after the package stage. Check the package manifest and the package manager output." >&2
   exit 1
 fi
 
 if ! command -v zsh >/dev/null 2>&1; then
-  echo "ERROR: zsh is not installed after the package stage. Check packages/arch.txt and the pacman output." >&2
+  echo "ERROR: zsh is not installed after the package stage. Check the package manifest and the package manager output." >&2
   exit 1
 fi
 
@@ -99,12 +157,15 @@ if [[ -x "$FNM_DIR/fnm" ]]; then
   echo "INFO: fnm already installed at $FNM_DIR — skipping installer."
 else
   echo "INFO: Installing fnm to $FNM_DIR via the official curl installer."
-  curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir "$FNM_DIR" --skip-shell
+  # On macOS the installer defaults to Homebrew and ignores --install-dir unless forced.
+  FNM_INSTALLER_EXTRA=""
+  [[ "$PLATFORM" == "macos" ]] && FNM_INSTALLER_EXTRA="--force-install"
+  curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir "$FNM_DIR" --skip-shell $FNM_INSTALLER_EXTRA
 fi
 
 # Login shell: zsh, changed only when it is not zsh already.
 ZSH_PATH="$(command -v zsh)"
-CURRENT_SHELL="$(getent passwd "$TARGET_USER" | cut -d: -f7)"
+CURRENT_SHELL="$(login_shell_of "$TARGET_USER")"
 if [[ "$(basename "${CURRENT_SHELL:-none}")" == "zsh" ]]; then
   echo "INFO: Login shell for $TARGET_USER is already zsh — skipping."
 else

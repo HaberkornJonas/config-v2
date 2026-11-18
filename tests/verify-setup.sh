@@ -12,6 +12,11 @@ for required in SSH_KEY_FILE GPG_FINGERPRINT FNM_DIR; do
   fi
 done
 
+# setup.sh passes PLATFORM; detect it when run another way.
+if [[ -z "${PLATFORM:-}" ]]; then
+  if [[ "$(uname -s)" == "Darwin" ]]; then PLATFORM="macos"; else PLATFORM="arch"; fi
+fi
+
 checks=0
 failed=0
 failed_stages=()
@@ -25,17 +30,35 @@ fail() {
 warn() { echo "WARN: [$1] $2"; }
 
 # [packages] manifest entries installed, key commands on PATH
-while IFS= read -r line || [[ -n "$line" ]]; do
-  pkg="${line%%#*}"
-  pkg="${pkg//[[:space:]]/}"
-  [[ -n "$pkg" ]] || continue
-  if pacman -Q "$pkg" >/dev/null 2>&1; then pass packages "package $pkg installed"
-  else fail packages "Package '$pkg' from packages/arch.txt is not installed. Rerun ./setup.sh or run: sudo pacman -S --needed $pkg"; fi
-done < "$REPO_ROOT/packages/arch.txt"
-for cmd in chezmoi git zsh nvim tmux starship zoxide fzf docker dotnet; do
+if [[ "$PLATFORM" == "macos" ]]; then
+  # Brewfile entries look like: brew "name" / cask "name". Installed lists are read once.
+  brew_formulae=" $(brew list --formula -1 2>/dev/null | tr '\n' ' ') "
+  brew_casks=" $(brew list --cask -1 2>/dev/null | tr '\n' ' ') "
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^(brew|cask)[[:space:]]+\"([^\"]+)\" ]] || continue
+    kind="${BASH_REMATCH[1]}"
+    pkg="${BASH_REMATCH[2]}"
+    if [[ "$kind" == "cask" ]]; then installed="$brew_casks"; flag="--cask "; else installed="$brew_formulae"; flag=""; fi
+    if [[ "$installed" == *" ${pkg##*/} "* ]]; then pass packages "$kind $pkg installed"
+    else fail packages "Homebrew $kind '$pkg' from packages/Brewfile is not installed. Rerun ./setup.sh or run: brew install $flag$pkg"; fi
+  done < "$REPO_ROOT/packages/Brewfile"
+else
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    pkg="${line%%#*}"
+    pkg="${pkg//[[:space:]]/}"
+    [[ -n "$pkg" ]] || continue
+    if pacman -Q "$pkg" >/dev/null 2>&1; then pass packages "package $pkg installed"
+    else fail packages "Package '$pkg' from packages/arch.txt is not installed. Rerun ./setup.sh or run: sudo pacman -S --needed $pkg"; fi
+  done < "$REPO_ROOT/packages/arch.txt"
+fi
+for cmd in chezmoi git zsh nvim tmux starship zoxide fzf docker; do
   if command -v "$cmd" >/dev/null 2>&1; then pass packages "command $cmd on PATH"
-  else fail packages "Command '$cmd' is not on PATH. Check packages/arch.txt and rerun ./setup.sh."; fi
+  else fail packages "Command '$cmd' is not on PATH. Check the package manifest and rerun ./setup.sh."; fi
 done
+
+# The .NET SDK is optional (INSTALL_DOTNET_SDK in setup.sh): reported, never a failure.
+if command -v dotnet >/dev/null 2>&1; then pass packages "optional command dotnet on PATH"
+else echo "INFO: [packages] Optional .NET SDK not installed (skipped). Install it with: INSTALL_DOTNET_SDK=true ./setup.sh"; fi
 
 # [stateful] fnm, SSH key, login shell; GPG is warn-only (import is manual by design)
 if [[ -x "$FNM_DIR/fnm" ]]; then pass stateful "fnm installed at $FNM_DIR"
@@ -46,7 +69,8 @@ elif [[ -f "$SSH_KEY_FILE.pub" ]]; then fail stateful "Found $SSH_KEY_FILE.pub w
 else fail stateful "SSH key $SSH_KEY_FILE is missing. Rerun ./setup.sh to generate it."; fi
 
 user="$(id -un)"
-login_shell="$(getent passwd "$user" | cut -d: -f7)"
+if [[ "$PLATFORM" == "macos" ]]; then login_shell="$(dscl . -read "/Users/$user" UserShell 2>/dev/null | awk '{print $2}')"
+else login_shell="$(getent passwd "$user" | cut -d: -f7)"; fi
 login_shell="$(basename "${login_shell:-none}")"
 if [[ "$login_shell" == "zsh" ]]; then pass stateful "login shell for $user is zsh"
 else fail stateful "Login shell for $user is $login_shell, not zsh. Run: sudo chsh -s \"\$(command -v zsh)\" $user, then start a new login session."; fi
@@ -95,7 +119,7 @@ done
 
 # Clean environment, like an agent spawning bash: only what the startup files provide counts.
 agent_bash() {
-  env -i HOME="$HOME" USER="$user" LOGNAME="$user" TERM=dumb PATH=/usr/local/bin:/usr/bin \
+  env -i HOME="$HOME" USER="$user" LOGNAME="$user" TERM=dumb PATH=/usr/local/bin:/usr/bin:/bin \
     ${XDG_DATA_HOME:+XDG_DATA_HOME="$XDG_DATA_HOME"} bash "$1" "$2" 2>/dev/null
 }
 agent_cmds=(which fnm)

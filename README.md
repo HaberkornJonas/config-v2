@@ -1,6 +1,6 @@
 # config-v2
 
-`config-v2` is the bootstrap repository for bringing up an Arch Linux development machine from a local checkout. Arch Linux (WSL or VM) is the only supported target. The `dotfiles/` directory is part of `config-v2`, so one clone holds the bootstrap logic, the package manifest and the managed configuration.
+`config-v2` is the bootstrap repository for bringing up a development machine from a local checkout. Arch Linux (WSL or VM) and macOS (Apple silicon, with Homebrew) are the only supported targets. The `dotfiles/` directory is part of `config-v2`, so one clone holds the bootstrap logic, the package manifests and the managed configuration.
 
 ## Linux Quick Start
 
@@ -20,6 +20,8 @@ chmod +x ./setup.sh
 ```
 
 `setup.sh` carries its bootstrap configuration inline. If you need different values in your own copy or fork, update the configuration block at the top of `setup.sh` before you run that variant.
+
+The .NET SDK is optional and off by default. To install it, set `INSTALL_DOTNET_SDK` to `true` in that block, or run `INSTALL_DOTNET_SDK=true ./setup.sh`. Verification reports a missing SDK but never fails on it.
 
 `setup.sh` reads `packages/arch.txt` and `dotfiles/` from the same checkout. Running the script from the cloned repository is the supported bootstrap path. If a repo-local asset is missing, `setup.sh` exits with an actionable error before it changes anything. Run it as a normal user that has `sudo`; it refuses to run as root.
 
@@ -99,14 +101,28 @@ chezmoi apply
 
 If `chezmoi apply` warns that the config file template has changed, rerun `./setup.sh` rather than running `chezmoi init` yourself: `setup.sh` passes the identity values from its configuration block to `chezmoi init`, and a bare `chezmoi init` falls back to the template's test identity.
 
+## macOS Quick Start
+
+macOS uses the same `setup.sh`, the same dotfiles and the same verification. Only the package stage differs: on macOS, `setup.sh` installs `packages/Brewfile` with `brew bundle` instead of `packages/arch.txt` with pacman.
+
+1. Install the Xcode Command Line Tools (`xcode-select --install`) and [Homebrew](https://brew.sh).
+2. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) yourself. It is not in the Brewfile, because the cask fails when the app is already installed. Verification checks that the `docker` command is on `PATH`.
+3. Clone the repository and run `./setup.sh`, as on Linux. If you opt into the .NET SDK (`INSTALL_DOTNET_SDK=true`), the `dotnet-sdk` cask asks for your password.
+
+On macOS, `setup.sh` signs commits with the key in `GPG_FINGERPRINT_MACOS` instead of `GPG_FINGERPRINT`. If it can find `gpg`, `~/.gitconfig` also pins `gpg.program` to that binary, so that GUI apps can sign. The zsh shipped with macOS is used as the login shell, and the Nerd Font is installed as a Homebrew cask. Select `MonaspiceNe Nerd Font` in your terminal.
+
+Machine-specific zsh extras that should not be published (completions for locally installed tools, for example) go in `~/.zshrc.local`. The managed `~/.zshrc` sources that file when it exists. Neither `setup.sh` nor chezmoi writes it.
+
+To update the Mac later, follow [Updating an existing machine](#updating-an-existing-machine). It works the same on both platforms.
+
 ## Verification
 
 Verification is the last stage of `./setup.sh` and can also run on its own with `./setup.sh --verify`. It only reads the machine: it never installs, applies, generates or deletes anything. It runs every check, so one run lists all broken parts. Each failure prints `ERROR: [<stage>] <what is wrong>. <how to fix>`, the run ends with `ERROR: Verification failed: <k> of <n> checks failed (stages: ...)`, and it exits non-zero. `Bootstrap complete.` is printed only after verification passes.
 
 | Stage | What is checked |
 | --- | --- |
-| `[packages]` | every entry of `packages/arch.txt` is installed, and the key commands are on `PATH` |
-| `[stateful]` | fnm is installed, the SSH key exists (a `.pub` file without its private key fails), the login shell is zsh |
+| `[packages]` | every entry of `packages/arch.txt` (Arch) or `packages/Brewfile` (macOS) is installed, and the key commands are on `PATH` |
+| `[stateful]` | fnm is installed, the SSH key exists (a `.pub` file without its private key fails), the login shell is zsh (from `getent` on Arch, `dscl` on macOS) |
 | `[dotfiles]` | the chezmoi source is this checkout's `dotfiles/`, `chezmoi verify` reports no drift, every managed file exists |
 | `[shell]` | `~/.zshrc` parses; `~/.bashrc`, `~/.bash_profile`, `~/.profile` and `~/.config/shell/env.sh` parse; a clean-environment `bash -lc` and `bash -ic` (what agents use) find `which`, `fnm` and, once fnm has a default version, `node`/`npm`/`npx` |
 | `[editor]` | Neovim loads the managed `init.lua` |
@@ -135,7 +151,7 @@ Every path the bootstrap touches has exactly one owner: chezmoi rewrites managed
 | Login shell (your `/etc/passwd` entry) | stateful-asset | Changed to zsh via `sudo chsh` only when it is not zsh already |
 | `~/.local/share/chezmoi` (legacy chezmoi source) | stateful-asset | Reported, never modified or deleted |
 
-`~/.ssh/config` is not listed: it stays yours, and neither `setup.sh` nor chezmoi writes it. Shell history and zinit plugins are created by zsh at runtime, not by the bootstrap.
+`~/.ssh/config` and `~/.zshrc.local` are not listed: they stay yours, and neither `setup.sh` nor chezmoi writes them. Shell history and zinit plugins are created by zsh at runtime, not by the bootstrap.
 
 ## Public-Safe Rules
 
@@ -148,19 +164,19 @@ This repository is public and is also the test fixture for repeated end-to-end b
 
 ## Not Supported Yet
 
-Only the Arch Linux path is shipped and tested. These targets are deferred:
+Only the Arch Linux and macOS paths are shipped. The Windows validators below test only the Arch path; macOS is checked by running `./setup.sh --verify` on a Mac. These targets are deferred:
 
 - Windows: no native or PowerShell bootstrap; use an Arch Linux WSL instance instead
 - other Linux distros (for example Ubuntu): no package manifest and no setup path
 
-`setup.sh` exits during preflight on any host that is not Arch Linux, before it changes anything. Supporting another target would need a new architecture decision.
+`setup.sh` exits during preflight on any host that is neither Arch Linux nor macOS, before it changes anything. Supporting another target would need a new architecture decision.
 
 ## Architecture Overview
 
 `config-v2` is a single repository with one execution contract: clone it, then run `./setup.sh` from the checkout.
 
 - `setup.sh` orchestrates the bootstrap in a fixed order and carries the inline bootstrap configuration
-- `packages/arch.txt` is the package manifest installed through pacman
+- `packages/arch.txt` is the Arch package manifest installed through pacman; `packages/Brewfile` is its macOS counterpart installed through `brew bundle`
 - `dotfiles/` is the chezmoi source tree for the managed configuration; it is applied from the local checkout
 - `tests/` holds the repo-local smoke verification (`verify-setup.sh`) and the validators for the scripts and this README
 

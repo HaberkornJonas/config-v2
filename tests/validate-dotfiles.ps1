@@ -39,7 +39,7 @@ $managedTargets = @(
     '.config/tmux/tmux.conf'
 )
 
-$identityKeys = @('GIT_USER_NAME', 'GIT_USER_EMAIL', 'GPG_FINGERPRINT')
+$identityKeys = @('GIT_USER_NAME', 'GIT_USER_EMAIL', 'GPG_FINGERPRINT', 'GPG_FINGERPRINT_MACOS')
 $linuxSandboxRoot = '/var/tmp/config-v2-dotfiles'
 
 function Get-RelativeSourcePath([string]$fullPath) {

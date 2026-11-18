@@ -2,7 +2,6 @@ btop
 chezmoi
 docker
 docker-compose
-dotnet-sdk
 fzf
 git
 htop

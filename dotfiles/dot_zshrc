@@ -9,6 +9,9 @@ HISTSIZE=50000
 SAVEHIST=50000
 setopt share_history hist_ignore_dups
 
+# --- Start in ~/repos when a new shell opens in $HOME (shells opened elsewhere keep their directory) ---
+[[ "$PWD" == "$HOME" && -d "$HOME/repos" ]] && cd "$HOME/repos"
+
 # --- zinit bootstrap (zdharma-continuum) ---
 ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
 [ ! -d $ZINIT_HOME ] && mkdir -p "$(dirname $ZINIT_HOME)"

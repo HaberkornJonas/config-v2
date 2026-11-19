@@ -151,7 +151,7 @@ Every path the bootstrap touches has exactly one owner: chezmoi rewrites managed
 | Login shell (your `/etc/passwd` entry) | stateful-asset | Changed to zsh via `sudo chsh` only when it is not zsh already |
 | `~/.local/share/chezmoi` (legacy chezmoi source) | stateful-asset | Reported, never modified or deleted |
 
-`~/.ssh/config` and `~/.zshrc.local` are not listed: they stay yours, and neither `setup.sh` nor chezmoi writes them. Shell history and zinit plugins are created by zsh at runtime, not by the bootstrap.
+`~/.ssh/config` and `~/.zshrc.local` are not listed: they stay yours, and neither `setup.sh` nor chezmoi writes them. The same goes for `~/repos`: when it exists, a new zsh that opens in `$HOME` starts there instead. Shell history and zinit plugins are created by zsh at runtime, not by the bootstrap.
 
 ## Public-Safe Rules
 

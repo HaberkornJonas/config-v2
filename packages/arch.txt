@@ -8,6 +8,7 @@ htop
 jq
 neovim
 openssh
+openssl-3
 otf-monaspace-nerd
 starship
 tmux
